@@ -2,7 +2,39 @@ import React, { useState, useEffect } from 'react';
 import { Upload, FileText, AlertTriangle, TrendingUp, Activity, PieChart, AlertCircle, TrendingDown, DollarSign, Plus, Calendar, Users, Building, Contact } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 
-function MetricCard({ title, value, delta, deltaPrefix = '', chartData, chartKey, isRatio = false, isNegativeGood = false }) {
+function YoYBadge({ current, previous, isRatio = false, isNegativeGood = false }) {
+    if (previous === undefined || previous === null || current === undefined || current === null) return null;
+    let diff = 0;
+    let formatted = "";
+    if (isRatio) {
+        diff = current - previous;
+        formatted = `${diff > 0 ? '+' : ''}${diff.toFixed(2)} pp`;
+    } else {
+        if (previous === 0) return null;
+        diff = ((current - previous) / previous) * 100;
+        formatted = `${diff > 0 ? '+' : ''}${diff.toFixed(1)}%`;
+    }
+
+    if (Math.abs(diff) < 0.01) {
+        return <span className="ml-2 text-[10px] font-medium text-gray-400 inline-flex items-center">(- 0%)</span>;
+    }
+
+    const isPositiveDiff = diff > 0;
+    const isGood = isNegativeGood ? !isPositiveDiff : isPositiveDiff;
+
+    const colorClass = isGood
+        ? "bg-green-100 text-green-700"
+        : "bg-red-100 text-red-700";
+
+    return (
+        <span className={`ml-3 px-2 py-0.5 text-[11px] font-semibold rounded-full ${colorClass} inline-flex items-center shadow-sm`}>
+            {isPositiveDiff ? <TrendingUp size={12} className="mr-1" /> : <TrendingDown size={12} className="mr-1" />}
+            {formatted}
+        </span>
+    );
+}
+
+function MetricCard({ title, value, delta, deltaPrefix = '', chartData, chartKey, isRatio = false, isNegativeGood = false, baselineYear = 'prev' }) {
     const isPositiveDelta = typeof delta === 'number' && delta >= 0;
 
     // Color: green = good, red = bad. For isNegativeGood metrics (Cost-to-Income, GNPA), going up is bad.
@@ -21,19 +53,21 @@ function MetricCard({ title, value, delta, deltaPrefix = '', chartData, chartKey
     const deltaSuffix = isRatio ? ' p.p.' : '%';
 
     return (
-        <div className="bg-[#141b2d] border border-gray-800 rounded-xl p-5 flex flex-col justify-between">
+        <div className="bg-panel rounded-[24px] p-6 flex flex-col justify-between shadow-soft border border-gray-100 hover:shadow-card transition-shadow duration-300">
             <div>
-                <div className="flex justify-between items-center mb-2">
-                    <h3 className="text-gray-400 text-sm font-medium">{title}</h3>
+                <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-gray-500 uppercase tracking-wider text-xs font-semibold">{title}</h3>
                 </div>
-                <div className="text-3xl font-bold text-white mb-2">
+                <div className="text-3xl font-bold text-gray-900 tracking-tight mb-2">
                     {value}{valueSuffix}
                 </div>
+
                 {delta !== undefined && (
-                    <div className="flex items-center text-sm">
-                        <span className={`${deltaColor} font-medium flex items-center`}>
+                    <div className="flex items-center mt-3">
+                        <span className={`px-2 py-0.5 rounded-full bg-gray-50 border border-gray-100 text-xs font-semibold flex items-center ${deltaColor}`}>
                             {isPositiveDelta ? <TrendingUp size={14} className="mr-1" /> : <TrendingDown size={14} className="mr-1" />}
-                            {deltaPrefix}{Math.abs(delta).toFixed(1)}{deltaSuffix} vs prev.
+                            {deltaPrefix}{Math.abs(delta).toFixed(1)}{deltaSuffix}
+                            <span className="text-gray-400 ml-1.5 font-medium lowercase">vs {baselineYear}</span>
                         </span>
                     </div>
                 )}
@@ -72,29 +106,19 @@ function MetricCard({ title, value, delta, deltaPrefix = '', chartData, chartKey
 }
 
 function RiskCard({ risk }) {
-    const getSeverityColor = (level) => {
-        switch (level?.toLowerCase()) {
-            case 'critical': return 'bg-red-900/10 border-red-800 border-l-4 border-l-red-500';
-            case 'high': return 'bg-orange-900/10 border-orange-800 border-l-4 border-l-orange-500';
-            case 'medium': return 'bg-yellow-900/10 border-yellow-800 border-l-4 border-l-yellow-500';
-            case 'low': return 'bg-green-900/10 border-green-800 border-l-4 border-l-green-500';
-            default: return 'bg-gray-800 border-gray-700 border-l-4 border-l-gray-500';
-        }
-    };
-
     const getSeverityBadgeColor = (level) => {
         switch (level?.toLowerCase()) {
-            case 'critical': return 'bg-red-900/60 text-red-400 border-red-800';
-            case 'high': return 'bg-orange-900/60 text-orange-400 border-orange-800';
-            case 'medium': return 'bg-yellow-900/60 text-yellow-400 border-yellow-800';
-            case 'low': return 'bg-green-900/60 text-green-400 border-green-800';
-            default: return 'bg-gray-800 text-gray-400 border-gray-700';
+            case 'critical': return 'bg-red-100 text-red-700';
+            case 'high': return 'bg-orange-100 text-orange-700';
+            case 'medium': return 'bg-yellow-100 text-yellow-700';
+            case 'low': return 'bg-green-100 text-green-700';
+            default: return 'bg-gray-100 text-gray-700';
         }
     };
 
     return (
         <div
-            className={`bg-[#141b2d] border rounded-xl p-6 ${getSeverityColor(risk.severity_level)}`}
+            className={`bg-panel border border-gray-100 rounded-[24px] p-6 shadow-soft hover:shadow-card transition-shadow duration-300`}
             style={{
                 display: 'grid',
                 gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.5fr)',
@@ -105,24 +129,27 @@ function RiskCard({ risk }) {
             {/* Column 1: Badge + Category + Description */}
             <div style={{ minWidth: 0 }}>
                 <div className="flex items-center gap-3 mb-3">
-                    <span className={`text-[10px] px-2 py-0.5 rounded border font-bold uppercase tracking-wider shrink-0 whitespace-nowrap ${getSeverityBadgeColor(risk.severity_level)}`}>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shrink-0 whitespace-nowrap ${getSeverityBadgeColor(risk.severity_level)}`}>
                         {risk.severity_level}
                     </span>
-                    <span className="text-gray-500 text-xs font-medium" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{risk.category}</span>
+                    <span className="text-gray-500 text-xs font-semibold uppercase tracking-wider" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{risk.category}</span>
                 </div>
-                <p className="text-gray-300 text-sm leading-relaxed" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{risk.description}</p>
+                <p className="text-gray-600 text-sm leading-relaxed" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{risk.description}</p>
             </div>
 
             {/* Column 2: Valuation Impact */}
-            <div style={{ minWidth: 0, borderLeft: '1px solid rgba(55, 65, 81, 0.6)', paddingLeft: '1.5rem' }}>
-                <p className="text-red-500 text-sm leading-relaxed" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{risk.valuation_impact}</p>
+            <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 h-full" style={{ minWidth: 0 }}>
+                <div className="flex items-start text-sm leading-relaxed text-gray-700">
+                    <DollarSign className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0 text-blue-500" />
+                    <span className="break-words w-full" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{risk.valuation_impact || "N/A"}</span>
+                </div>
             </div>
 
             {/* Column 3: Negotiation Leverage */}
-            <div className="bg-[#0b101c] p-4 rounded-xl border border-gray-800" style={{ minWidth: 0 }}>
-                <div className="flex items-start text-sm leading-relaxed text-gray-300">
-                    <div className="shrink-0 mt-1.5 mr-3 w-1.5 h-1.5 rounded-full bg-blue-500" style={{ boxShadow: '0 0 8px #3b82f6' }}></div>
-                    <span style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{risk.negotiation_leverage}</span>
+            <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100/50 h-full" style={{ minWidth: 0 }}>
+                <div className="flex items-start text-sm leading-relaxed text-gray-700">
+                    <FileText className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0 text-blue-500" />
+                    <span className="break-words w-full" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{risk.negotiation_leverage_point || risk.negotiation_leverage || "N/A"}</span>
                 </div>
             </div>
         </div>
@@ -138,18 +165,18 @@ function RatioBar({ ratio }) {
     const barColor = ratio < 1.0 ? 'bg-orange-500' : 'bg-blue-500';
 
     return (
-        <div className="bg-[#141b2d] border border-gray-800 rounded-xl p-5 flex flex-col justify-between">
+        <div className="bg-panel rounded-[24px] p-6 flex flex-col justify-between shadow-soft border border-gray-100 hover:shadow-card transition-shadow duration-300">
             <div>
-                <div className="flex justify-between items-center mb-2">
-                    <h3 className="text-gray-400 text-sm font-medium">Depositors vs Borrowers</h3>
+                <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-gray-500 uppercase tracking-wider text-xs font-semibold">Depositors vs Borrowers</h3>
                 </div>
-                <div className="text-3xl font-bold text-white mb-2">{ratio.toFixed(2)}x</div>
+                <div className="text-3xl font-bold text-gray-900 tracking-tight mb-2">{ratio.toFixed(2)}x</div>
             </div>
 
             <div className="mt-4">
-                <div className="relative h-2 w-full bg-gray-600 rounded-full overflow-hidden flex">
+                <div className="relative h-2 w-full bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden flex">
                     <div style={{ width: `${fillPct}%` }} className={`${barColor} h-full transition-all duration-500`}></div>
-                    <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-white z-10 transform -translate-x-1/2"></div>
+                    <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-white z-10 transform -translate-x-1/2 shadow-sm"></div>
                 </div>
 
                 <div className="flex justify-between mt-2 text-xs font-medium text-gray-400">
@@ -168,6 +195,10 @@ export default function App() {
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState<any>(null);
     const [error, setError] = useState('');
+
+    useEffect(() => {
+        document.documentElement.classList.remove('dark');
+    }, []);
 
     // Dashboard states
     const [history, setHistory] = useState<any[]>([]);
@@ -275,7 +306,7 @@ export default function App() {
                     <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center mr-3 font-bold text-white shadow-lg shadow-blue-500/20">
                         D
                     </div>
-                    <h1 className="text-xl font-semibold tracking-wide">DealLens</h1>
+                    <h1 className="text-xl font-semibold tracking-wide text-gray-900">DealLens</h1>
                 </div>
             </header>
 
@@ -287,12 +318,12 @@ export default function App() {
                         {/* Add New Document Card */}
                         <div
                             onClick={() => setShowForm(true)}
-                            className="bg-green-600/10 border-2 border-dashed border-green-500/50 hover:bg-green-600/20 hover:border-green-500 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer transition-colors min-h-[200px]"
+                            className="bg-green-50/30 hover:bg-green-50/80 border-2 border-dashed border-green-300 rounded-[24px] p-6 flex flex-col items-center justify-center cursor-pointer transition-colors min-h-[200px]"
                         >
-                            <div className="bg-green-500 text-white rounded-full p-3 mb-4">
-                                <Plus size={24} />
+                            <div className="bg-[#22c55e] text-white rounded-full p-3 mb-4 flex items-center justify-center shadow-sm">
+                                <Plus size={24} strokeWidth={3} />
                             </div>
-                            <span className="text-green-500 font-semibold">New Document</span>
+                            <span className="text-green-600 font-semibold text-sm">New Document</span>
                         </div>
 
                         {/* History Cards */}
@@ -300,21 +331,21 @@ export default function App() {
                             <div
                                 key={idx}
                                 onClick={() => loadPastAnalysis(item.company_name)}
-                                className="bg-panel border border-gray-800 hover:border-blue-500/50 rounded-xl p-6 flex flex-col justify-between cursor-pointer transition-all hover:shadow-lg hover:shadow-blue-900/10 min-h-[200px]"
+                                className="bg-white border border-gray-300 hover:border-gray-400 rounded-[24px] p-6 flex flex-col justify-between cursor-pointer transition-all hover:shadow-soft min-h-[200px]"
                             >
                                 <div className="flex justify-between items-start mb-4">
-                                    <span className="text-xs font-semibold px-2 py-1 bg-green-900/30 text-green-500 border border-green-800 rounded">
+                                    <span className="text-xs font-semibold px-2 py-1 bg-green-100 text-green-700 rounded block">
                                         Analyzed
                                     </span>
-                                    <span className="text-xs text-gray-500">
-                                        {new Date(item.analyzed_at).toLocaleDateString()}
+                                    <span className="text-xs text-gray-500 font-medium">
+                                        {new Date(item.analyzed_at).toLocaleDateString('en-GB')}
                                     </span>
                                 </div>
                                 <div className="text-center mt-auto mb-auto">
-                                    <h3 className="text-xl font-bold text-white capitalize">{item.company_name}</h3>
+                                    <h3 className="text-xl font-bold text-gray-900 capitalize">{item.company_name}</h3>
                                 </div>
-                                <div className="flex justify-end mt-4 text-gray-600">
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                <div className="flex justify-end mt-4 text-gray-400">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
                                 </div>
                             </div>
                         ))}
@@ -324,26 +355,26 @@ export default function App() {
 
             {/* UPLOAD FORM VIEW */}
             {!data && showForm && (
-                <form onSubmit={handleAnalyze} className="animate-in fade-in slide-in-from-bottom-4 bg-panel border border-gray-800 rounded-2xl p-8 max-w-xl mx-auto mt-20 shadow-2xl">
+                <form onSubmit={handleAnalyze} className="animate-in fade-in slide-in-from-bottom-4 bg-panel border border-gray-200 dark:border-gray-800 rounded-2xl p-8 max-w-xl mx-auto mt-20 shadow-2xl">
                     <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-2xl font-bold">Analyze Target Company</h2>
-                        <button type="button" onClick={() => setShowForm(false)} className="text-gray-400 hover:text-white">Cancel</button>
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Analyze Target Company</h2>
+                        <button type="button" onClick={() => setShowForm(false)} className="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">Cancel</button>
                     </div>
 
                     <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-400 mb-2">Company Name</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Company Name</label>
                         <input
                             type="text"
                             value={companyName}
                             onChange={e => setCompanyName(e.target.value)}
-                            className="w-full bg-[#0b101c] border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            className="w-full bg-white dark:bg-[#0b101c] border border-gray-300 dark:border-gray-700 rounded-lg px-4 py-3 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                             placeholder="e.g. Baobab Group"
                         />
                     </div>
 
                     <div className="mb-8">
-                        <label className="block text-sm font-medium text-gray-400 mb-2">Upload Annual Reports (PDF)</label>
-                        <div className="relative border-2 border-dashed border-gray-700 rounded-lg p-8 text-center hover:border-blue-500 transition-colors bg-[#0b101c]">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-2">Upload Annual Reports (PDF)</label>
+                        <div className="relative border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-8 text-center hover:border-blue-500 transition-colors bg-gray-50 dark:bg-[#0b101c]">
                             <input
                                 type="file"
                                 multiple
@@ -351,10 +382,10 @@ export default function App() {
                                 onChange={handleFileChange}
                                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                             />
-                            <Upload className="mx-auto h-8 w-8 text-gray-500 mb-3" />
-                            <p className="text-sm text-gray-400">Drag & drop PDFs here or click to browse</p>
+                            <Upload className="mx-auto h-8 w-8 text-gray-400 dark:text-gray-500 mb-3" />
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Drag & drop PDFs here or click to browse</p>
                             {files.length > 0 && (
-                                <div className="mt-4 text-xs text-blue-400 font-medium">
+                                <div className="mt-4 text-xs text-blue-500 dark:text-blue-400 font-medium">
                                     {files.length} file(s) selected
                                 </div>
                             )}
@@ -389,45 +420,45 @@ export default function App() {
             {/* METRIC ANALYSIS VIEW */}
             {data && (
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-                    <div className="flex justify-between items-end mb-8 border-b border-gray-800 pb-6">
+                    <div className="flex justify-between items-end mb-12 border-b border-gray-100 pb-8">
                         <div>
-                            <h1 className="text-4xl font-bold mb-3 capitalize">{data.company_name}</h1>
-                            <div className="flex flex-wrap items-center gap-4 text-sm">
+                            <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight mb-4 capitalize">{data.company_name}</h1>
+                            <div className="flex flex-wrap items-center gap-3 text-sm">
                                 {latestFin?.operational_scale?.number_of_employees && (
-                                    <div className="flex items-center text-blue-400 bg-blue-900/20 px-3 py-1.5 rounded-full border border-blue-900/50">
-                                        <Users size={14} className="mr-1.5" />
-                                        <span>{latestFin.operational_scale.number_of_employees.toLocaleString()} Employees</span>
+                                    <div className="flex items-center text-gray-500 border border-gray-200 bg-white px-4 py-1.5 rounded-full font-medium shadow-sm">
+                                        <Users size={14} className="mr-2 opacity-60" />
+                                        <span><span className="font-semibold text-gray-900 mr-1">{latestFin.operational_scale.number_of_employees.toLocaleString()}</span>Employees</span>
                                     </div>
                                 )}
                                 {latestFin?.operational_scale?.number_of_branches && (
-                                    <div className="flex items-center text-purple-400 bg-purple-900/20 px-3 py-1.5 rounded-full border border-purple-900/50">
-                                        <Building size={14} className="mr-1.5" />
-                                        <span>{latestFin.operational_scale.number_of_branches} Branches</span>
+                                    <div className="flex items-center text-gray-500 border border-gray-200 bg-white px-4 py-1.5 rounded-full font-medium shadow-sm">
+                                        <Building size={14} className="mr-2 opacity-60" />
+                                        <span><span className="font-semibold text-gray-900 mr-1">{latestFin.operational_scale.number_of_branches}</span>Branches</span>
                                     </div>
                                 )}
                                 {latestFin?.operational_scale?.number_of_borrowers && (
-                                    <div className="flex items-center text-teal-400 bg-teal-900/20 px-3 py-1.5 rounded-full border border-teal-900/50">
-                                        <Contact size={14} className="mr-1.5" />
-                                        <span>{latestFin.operational_scale.number_of_borrowers.toLocaleString()} Borrowers</span>
+                                    <div className="flex items-center text-gray-500 border border-gray-200 bg-white px-4 py-1.5 rounded-full font-medium shadow-sm">
+                                        <Contact size={14} className="mr-2 opacity-60" />
+                                        <span><span className="font-semibold text-gray-900 mr-1">{latestFin.operational_scale.number_of_borrowers.toLocaleString()}</span>Borrowers</span>
                                     </div>
                                 )}
                                 {latestFin?.year && (
-                                    <div className="flex items-center text-green-400 bg-green-900/20 px-3 py-1.5 rounded-full border border-green-900/50">
-                                        <Calendar size={14} className="mr-1.5" />
-                                        <span>Year {latestFin.year}</span>
+                                    <div className="flex items-center text-gray-500 border border-gray-200 bg-white px-4 py-1.5 rounded-full font-medium shadow-sm">
+                                        <Calendar size={14} className="mr-2 opacity-60" />
+                                        <span><span className="font-semibold text-gray-900 mr-1">Year</span>{latestFin.year}</span>
                                     </div>
                                 )}
                                 {currency && (
-                                    <div className="flex items-center text-orange-400 bg-orange-900/20 px-3 py-1.5 rounded-full border border-orange-900/50">
-                                        <DollarSign size={14} className="mr-1.5" />
-                                        <span>Currency: {currency}</span>
+                                    <div className="flex items-center text-gray-500 border border-gray-200 bg-white px-4 py-1.5 rounded-full font-medium shadow-sm">
+                                        <DollarSign size={14} className="mr-2 opacity-60" />
+                                        <span><span className="font-semibold text-gray-900 mr-1">{currency}</span>Currency</span>
                                     </div>
                                 )}
                             </div>
                         </div>
                         <button
                             onClick={() => { setData(null); setShowForm(false); }}
-                            className="px-4 py-2 border border-gray-700 rounded-lg hover:bg-gray-800 transition-colors text-sm"
+                            className="px-5 py-2.5 bg-white border border-gray-200 rounded-full hover:bg-gray-50 transition-colors text-sm font-semibold text-gray-700 shadow-sm"
                         >
                             Back to Dashboard
                         </button>
@@ -436,7 +467,7 @@ export default function App() {
 
                     {/* Absolute Health (2024 Est.) */}
                     <div className="mb-10">
-                        <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4 flex items-center">
+                        <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center">
                             <div className="w-1 h-4 bg-blue-500 mr-2 rounded"></div>
                             Absolute Health
                         </h2>
@@ -447,6 +478,7 @@ export default function App() {
                                 delta={calcDelta(latestFin?.general_financials?.revenue, firstFin?.general_financials?.revenue)}
                                 chartData={data.financial_data.map(d => ({ name: d.year, val: d.general_financials?.revenue }))}
                                 chartKey="val"
+                                baselineYear={firstFin?.year}
                             />
                             <MetricCard
                                 title="EBITDA"
@@ -454,6 +486,7 @@ export default function App() {
                                 delta={calcDelta(latestFin?.general_financials?.ebitda, firstFin?.general_financials?.ebitda)}
                                 chartData={data.financial_data.map(d => ({ name: d.year, val: d.general_financials?.ebitda }))}
                                 chartKey="val"
+                                baselineYear={firstFin?.year}
                             />
                             <MetricCard
                                 title="PAT"
@@ -461,6 +494,7 @@ export default function App() {
                                 delta={calcDelta(latestFin?.general_financials?.pat, firstFin?.general_financials?.pat)}
                                 chartData={data.financial_data.map(d => ({ name: d.year, val: d.general_financials?.pat }))}
                                 chartKey="val"
+                                baselineYear={firstFin?.year}
                             />
                             <MetricCard
                                 title="Total Equity"
@@ -468,20 +502,23 @@ export default function App() {
                                 delta={calcDelta(latestFin?.capital_and_funding?.total_equity, firstFin?.capital_and_funding?.total_equity)}
                                 chartData={data.financial_data.map(d => ({ name: d.year, val: d.capital_and_funding?.total_equity }))}
                                 chartKey="val"
+                                baselineYear={firstFin?.year}
                             />
                             {/* Credit Rating - Horizontal bars with tooltips */}
-                            <div className="bg-[#141b2d] border border-gray-800 rounded-xl p-5 flex flex-col justify-between">
+                            <div className="bg-panel rounded-[24px] p-6 flex flex-col justify-between shadow-soft border border-gray-100 hover:shadow-card transition-shadow duration-300">
                                 <div>
-                                    <div className="flex justify-between items-center mb-2">
-                                        <h3 className="text-gray-400 text-sm font-medium">Credit Rating</h3>
+                                    <div className="flex justify-between items-center mb-3">
+                                        <h3 className="text-gray-500 uppercase tracking-wider text-xs font-semibold">Credit Rating</h3>
                                     </div>
-                                    <div className="text-3xl font-bold text-white mb-2">{latestFin?.capital_and_funding?.credit_rating || 'N/A'}</div>
+                                    <div className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight mb-2 break-words leading-tight pr-2">
+                                        {latestFin?.capital_and_funding?.credit_rating || 'N/A'}
+                                    </div>
                                 </div>
                                 <div className="flex gap-1.5 mt-4 items-end">
                                     {data.financial_data.map((d, i) => (
                                         <div key={i} className="group relative flex-1">
-                                            <div className="h-2 rounded-full bg-gray-600 w-full transition-colors hover:bg-gray-400 cursor-pointer"></div>
-                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-[#0b101c] border border-gray-700 rounded text-xs text-white whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">
+                                            <div className="h-2 rounded-full bg-gray-200 w-full transition-colors hover:bg-gray-400 cursor-pointer"></div>
+                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs text-white whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">
                                                 {d.year}: {d.capital_and_funding?.credit_rating || 'N/A'}
                                             </div>
                                         </div>
@@ -493,7 +530,7 @@ export default function App() {
 
                     {/* Operating Metrics */}
                     <div className="mb-10">
-                        <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4 flex items-center">
+                        <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center">
                             <div className="w-1 h-4 bg-purple-500 mr-2 rounded"></div>
                             Operating Metrics
                         </h2>
@@ -507,6 +544,7 @@ export default function App() {
                                 chartData={data.financial_data.map((d: any) => ({ name: d.year, val: d.loan_book?.nim_percent }))}
                                 chartKey="val"
                                 isNegativeGood={false}
+                                baselineYear={firstFin?.year}
                             />
                             <MetricCard
                                 title="Cost-to-Income"
@@ -517,6 +555,7 @@ export default function App() {
                                 chartData={data.financial_data.map((d: any) => ({ name: d.year, val: d.general_financials?.cost_to_income_ratio_percent }))}
                                 chartKey="val"
                                 isNegativeGood={true}
+                                baselineYear={firstFin?.year}
                             />
                             <MetricCard
                                 title="GNPA Ratio"
@@ -526,63 +565,83 @@ export default function App() {
                                 chartData={data.financial_data.map((d: any) => ({ name: d.year, val: d.loan_book?.npl_ratio_percent || d.loan_book?.gnpa_percent }))}
                                 chartKey="val"
                                 isNegativeGood={true}
+                                baselineYear={firstFin?.year}
                             />
                         </div>
                     </div>
 
                     {/* Loan Book */}
                     <div className="mb-10">
-                        <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4 flex items-center">
+                        <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center">
                             <div className="w-1 h-4 bg-teal-500 mr-2 rounded"></div>
                             Loan Book
                         </h2>
-                        <div className="bg-[#141b2d] border border-gray-800 rounded-xl overflow-hidden">
+                        <div className="bg-panel rounded-[24px] overflow-hidden shadow-soft border border-gray-100 p-2">
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left border-collapse whitespace-nowrap">
                                     <thead>
-                                        <tr className="bg-[#0b101c] border-b border-gray-800 text-gray-400 text-sm">
-                                            <th className="p-4 font-medium">Metric</th>
+                                        <tr className="border-b border-gray-100 text-gray-500 text-xs font-semibold uppercase tracking-wider">
+                                            <th className="p-5">Metric</th>
                                             {data.financial_data.map((d: any) => (
-                                                <th key={d.year} className="p-4 font-medium text-right">{d.year}</th>
+                                                <th key={d.year} className="p-5 text-right">{d.year}</th>
                                             ))}
                                         </tr>
                                     </thead>
-                                    <tbody className="text-sm divide-y divide-gray-800/50">
-                                        <tr className="hover:bg-gray-800/30 transition-colors">
-                                            <td className="p-4 text-gray-300">Loan Outstanding</td>
-                                            {data.financial_data.map((d: any) => (
-                                                <td key={d.year} className="p-4 text-right font-medium text-white">{d.loan_book?.total_loan_outstanding?.toLocaleString() || '-'}</td>
+                                    <tbody className="text-sm divide-y divide-gray-50">
+                                        <tr className="hover:bg-gray-50/50 transition-colors group">
+                                            <td className="p-5 text-gray-600 font-medium">Loan Outstanding</td>
+                                            {data.financial_data.map((d: any, i: number) => (
+                                                <td key={d.year} className="p-5 text-right font-semibold text-gray-900">
+                                                    {d.loan_book?.total_loan_outstanding?.toLocaleString() || '-'}
+                                                    {i > 0 && <YoYBadge current={d.loan_book?.total_loan_outstanding} previous={data.financial_data[i - 1].loan_book?.total_loan_outstanding} isNegativeGood={false} />}
+                                                </td>
                                             ))}
                                         </tr>
-                                        <tr className="hover:bg-gray-800/30 transition-colors">
-                                            <td className="p-4 text-gray-300">AUM</td>
-                                            {data.financial_data.map((d: any) => (
-                                                <td key={d.year} className="p-4 text-right font-medium text-white">{d.loan_book?.aum?.toLocaleString() || '-'}</td>
+                                        <tr className="hover:bg-gray-50/50 transition-colors group">
+                                            <td className="p-5 text-gray-600 font-medium">AUM</td>
+                                            {data.financial_data.map((d: any, i: number) => (
+                                                <td key={d.year} className="p-5 text-right font-semibold text-gray-900">
+                                                    {d.loan_book?.aum?.toLocaleString() || '-'}
+                                                    {i > 0 && <YoYBadge current={d.loan_book?.aum} previous={data.financial_data[i - 1].loan_book?.aum} isNegativeGood={false} />}
+                                                </td>
                                             ))}
                                         </tr>
-                                        <tr className="hover:bg-gray-800/30 transition-colors">
-                                            <td className="p-4 text-gray-300">GNPA / NPL (%)</td>
-                                            {data.financial_data.map((d: any) => {
+                                        <tr className="hover:bg-gray-50/50 transition-colors group">
+                                            <td className="p-5 text-gray-600 font-medium">GNPA / NPL (%)</td>
+                                            {data.financial_data.map((d: any, i: number) => {
                                                 const val = d.loan_book?.npl_ratio_percent || d.loan_book?.gnpa_percent;
-                                                return <td key={d.year} className="p-4 text-right font-medium text-white">{val !== undefined && val !== null ? `${val}%` : '-'}</td>;
+                                                const prevVal = data.financial_data[i - 1]?.loan_book?.npl_ratio_percent || data.financial_data[i - 1]?.loan_book?.gnpa_percent;
+                                                return <td key={d.year} className="p-5 text-right font-semibold text-gray-900">
+                                                    {val !== undefined && val !== null ? `${val}%` : '-'}
+                                                    {i > 0 && <YoYBadge current={val} previous={prevVal} isRatio={true} isNegativeGood={true} />}
+                                                </td>;
                                             })}
                                         </tr>
-                                        <tr className="hover:bg-gray-800/30 transition-colors">
-                                            <td className="p-4 text-gray-300">PAR 30 (%)</td>
-                                            {data.financial_data.map((d: any) => (
-                                                <td key={d.year} className="p-4 text-right font-medium text-white">{d.loan_book?.par_30_percent !== undefined && d.loan_book?.par_30_percent !== null ? `${d.loan_book.par_30_percent}%` : '-'}</td>
+                                        <tr className="hover:bg-gray-50/50 transition-colors group">
+                                            <td className="p-5 text-gray-600 font-medium">PAR 30 (%)</td>
+                                            {data.financial_data.map((d: any, i: number) => (
+                                                <td key={d.year} className="p-5 text-right font-semibold text-gray-900">
+                                                    {d.loan_book?.par_30_percent !== undefined && d.loan_book?.par_30_percent !== null ? `${d.loan_book.par_30_percent}%` : '-'}
+                                                    {i > 0 && <YoYBadge current={d.loan_book?.par_30_percent} previous={data.financial_data[i - 1].loan_book?.par_30_percent} isRatio={true} isNegativeGood={true} />}
+                                                </td>
                                             ))}
                                         </tr>
-                                        <tr className="hover:bg-gray-800/30 transition-colors">
-                                            <td className="p-4 text-gray-300">Provision Coverage (%)</td>
-                                            {data.financial_data.map((d: any) => (
-                                                <td key={d.year} className="p-4 text-right font-medium text-white">{d.loan_book?.provision_coverage_percent !== undefined && d.loan_book?.provision_coverage_percent !== null ? `${d.loan_book.provision_coverage_percent}%` : '-'}</td>
+                                        <tr className="hover:bg-gray-50/50 transition-colors group">
+                                            <td className="p-5 text-gray-600 font-medium">Provision Coverage (%)</td>
+                                            {data.financial_data.map((d: any, i: number) => (
+                                                <td key={d.year} className="p-5 text-right font-semibold text-gray-900">
+                                                    {d.loan_book?.provision_coverage_percent !== undefined && d.loan_book?.provision_coverage_percent !== null ? `${d.loan_book.provision_coverage_percent}%` : '-'}
+                                                    {i > 0 && <YoYBadge current={d.loan_book?.provision_coverage_percent} previous={data.financial_data[i - 1].loan_book?.provision_coverage_percent} isRatio={true} isNegativeGood={false} />}
+                                                </td>
                                             ))}
                                         </tr>
-                                        <tr className="hover:bg-gray-800/30 transition-colors">
-                                            <td className="p-4 text-gray-300">Disbursals</td>
-                                            {data.financial_data.map((d: any) => (
-                                                <td key={d.year} className="p-4 text-right font-medium text-white">{d.capital_and_funding?.disbursals?.toLocaleString() || '-'}</td>
+                                        <tr className="hover:bg-gray-50/50 transition-colors group">
+                                            <td className="p-5 text-gray-600 font-medium">Disbursals</td>
+                                            {data.financial_data.map((d: any, i: number) => (
+                                                <td key={d.year} className="p-5 text-right font-semibold text-gray-900">
+                                                    {d.capital_and_funding?.disbursals?.toLocaleString() || '-'}
+                                                    {i > 0 && <YoYBadge current={d.capital_and_funding?.disbursals} previous={data.financial_data[i - 1].capital_and_funding?.disbursals} isNegativeGood={false} />}
+                                                </td>
                                             ))}
                                         </tr>
                                     </tbody>
@@ -593,7 +652,7 @@ export default function App() {
 
                     {/* Profitability & Returns */}
                     <div className="mb-10">
-                        <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4 flex items-center">
+                        <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center">
                             <div className="w-1 h-4 bg-orange-500 mr-2 rounded"></div>
                             Profitability & Capital Returns
                         </h2>
@@ -605,6 +664,7 @@ export default function App() {
                                 delta={latestFin?.general_financials?.profit_margin_percent - firstFin?.general_financials?.profit_margin_percent}
                                 chartData={data.financial_data.map(d => ({ name: d.year, val: d.general_financials?.profit_margin_percent }))}
                                 chartKey="val"
+                                baselineYear={firstFin?.year}
                             />
                             <MetricCard
                                 title="CAR Tier 1"
@@ -615,17 +675,22 @@ export default function App() {
                                 chartData={data.financial_data.map(d => ({ name: d.year, val: d.capital_and_funding?.car_tier_1_percent }))}
                                 chartKey="val"
                                 isNegativeGood={false}
+                                baselineYear={firstFin?.year}
                             />
-                            <div className="bg-[#141b2d] border border-gray-800 rounded-xl p-5">
-                                <h3 className="text-gray-400 text-sm font-medium mb-2">ROE & ROA</h3>
-                                <div className="flex gap-8 mt-4">
-                                    <div>
-                                        <div className="text-sm text-gray-500 mb-1">ROE</div>
-                                        <div className="text-2xl font-bold">{latestFin?.general_financials?.roe_percent}%</div>
+                            <div className="bg-panel rounded-[24px] p-6 flex flex-col justify-between shadow-soft border border-gray-100 hover:shadow-card transition-shadow duration-300">
+                                <div>
+                                    <div className="flex justify-between items-center mb-3">
+                                        <h3 className="text-gray-500 uppercase tracking-wider text-xs font-semibold">ROE & ROA</h3>
                                     </div>
-                                    <div>
-                                        <div className="text-sm text-gray-500 mb-1">ROA</div>
-                                        <div className="text-2xl font-bold">{latestFin?.general_financials?.roa_percent}%</div>
+                                    <div className="flex gap-8 mt-2">
+                                        <div>
+                                            <div className="text-xs text-gray-500 font-semibold mb-1 uppercase tracking-wider">ROE</div>
+                                            <div className="text-3xl font-bold text-gray-900 tracking-tight">{latestFin?.general_financials?.roe_percent}%</div>
+                                        </div>
+                                        <div>
+                                            <div className="text-xs text-gray-500 font-semibold mb-1 uppercase tracking-wider">ROA</div>
+                                            <div className="text-3xl font-bold text-gray-900 tracking-tight">{latestFin?.general_financials?.roa_percent}%</div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -636,11 +701,11 @@ export default function App() {
                     {/* Risks & Anomalies */}
                     <div className="mb-10">
                         <div className="flex items-center mb-6">
-                            <div className="w-8 h-8 rounded bg-red-900/40 text-red-500 flex items-center justify-center mr-3">
+                            <div className="w-8 h-8 rounded-lg bg-red-100 text-red-500 flex items-center justify-center mr-3 shadow-sm">
                                 <AlertTriangle size={18} />
                             </div>
-                            <h2 className="text-xl font-bold">Identified Risks & Anomalies</h2>
-                            <span className="ml-3 text-xs font-semibold px-2 py-0.5 bg-red-900/30 text-red-400 border border-red-800 rounded-full">
+                            <h2 className="text-xl font-bold text-gray-900">Identified Risks & Anomalies</h2>
+                            <span className="ml-3 text-xs font-semibold px-2.5 py-1 bg-red-100 text-red-600 rounded-full border border-red-200">
                                 {data.anomalies_and_risks.length} items
                             </span>
                         </div>
@@ -659,7 +724,7 @@ export default function App() {
                             <div>NEGOTIATION LEVERAGE</div>
                         </div>
 
-                        <div className="flex flex-col gap-4 max-h-[600px] overflow-y-auto pr-2" style={{ scrollbarWidth: 'thin', scrollbarColor: '#334155 #0b101c' }}>
+                        <div className="flex flex-col gap-4 max-h-[600px] overflow-y-auto pr-2" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e1 transparent' }}>
                             {data.anomalies_and_risks.map((risk, i) => (
                                 <RiskCard key={i} risk={risk} />
                             ))}

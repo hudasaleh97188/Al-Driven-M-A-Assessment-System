@@ -3,18 +3,18 @@
 @tailwind utilities;
 
 :root {
-  --background: #0b101c;
-  --panel: #141b2d;
-  --text-primary: #ffffff;
-  --text-secondary: #94a3b8;
+  --background: #f8fafc;
+  --panel: #ffffff;
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
   --accent-blue: #2563eb;
-  --accent-green: #22c55e;
-  --accent-red: #ef4444;
-  --accent-orange: #f97316;
+  --accent-green: #16a34a;
+  --accent-red: #dc2626;
+  --accent-orange: #ea580c;
 }
 
 body {
-  background-color: var(--background);
-  color: var(--text-primary);
+  background-color: #f8fafc;
+  color: #0f172a;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }

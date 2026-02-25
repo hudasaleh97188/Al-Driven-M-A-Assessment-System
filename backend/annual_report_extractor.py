@@ -118,7 +118,7 @@ def extract_financials_from_reports(file_paths: List[str], project_id: Optional[
         project_id = "rag-project-485016"
         
     client = genai.Client(vertexai=True, project=project_id, location="global")
-    model_id = "gemini-3-pro-preview"
+    model_id = "gemini-3.1-pro-preview"
 
     # 2. Build Contents list (Prompt + Files)
     contents = []
@@ -135,9 +135,9 @@ def extract_financials_from_reports(file_paths: List[str], project_id: Optional[
     
     1. General Financials: Revenue, EBITDA, PAT (Net Income), ROE, ROA, Profit Margin, and Cost-to-Income Ratio.
     2. Loan Book: GNPA %, NPL ratio %, PAR > 30 %, Total Loan Outstanding, NIM %, and Provision Coverage %.
-    3. Capital & Funding: CAR (Tier 1) %, Total Equity, Disbursals, Depositors vs. Borrowers Ratio, and Credit Ratings.
-    4. Operational Scale: Number of Branches/Offices, Total Employees/FTEs, Active Borrowers/Customers, and AUM (Assets Under Management). Extract these for each year if available; look in operational highlights, management discussion sections, and key statistics tables.
-    
+    3. Capital & Funding: CAR (Tier 1) %, Total Equity, Disbursals, Depositors vs. Borrowers Ratio (this value only should not be in %), and Credit Ratings.
+    4. Operational Scale: Number of Branches (not point of sale), Total Employees/FTEs, Active Borrowers/Customers, and AUM (Assets Under Management). Extract these for each year if available; look in operational highlights, management discussion sections, and key statistics tables.
+    Some metrics require mathatical operations to be calculated. Use the needed Numbers to calculate the metric. Don't assume any values. If the value is not found or cannot be calculated, return null.
     === SECTION 2: DEEP RISK & ANOMALY ANALYSIS (anomalies_and_risks) ===
     
     This is the most critical section. DO NOT produce surface-level observations. You must synthesize data across multiple years, cross-reference narrative claims with actual figures, and identify hidden risks that a junior analyst would miss.
