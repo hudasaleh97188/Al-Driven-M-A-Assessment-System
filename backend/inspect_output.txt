@@ -1,0 +1,17 @@
+﻿SCHEMA:
+  col 0: id (INTEGER) default=None
+  col 1: company_name (TEXT) default=None
+  col 2: analyzed_at (TIMESTAMP) default=CURRENT_TIMESTAMP
+  col 3: currency (TEXT) default='USD'
+  col 4: financial_data_json (TEXT) default=None
+  col 5: anomalies_and_risks_json (TEXT) default=None
+
+TOTAL RECORDS: 1
+
+--- Record ---
+  [0] id = 1
+  [1] company_name = baobob group
+  [2] analyzed_at = 2026-02-24 16:54:08
+  [3] currency = USD
+  [4] financial_data_json = [{"year": 2022, "general_financials": {"revenue": 166616, "ebitda": 29142, "profit_margin_percent": ...
+  [5] anomalies_and_risks_json = [{"category": "Financial Anomaly", "description": "Transition from profitability (\u20ac17.8M in 202...
