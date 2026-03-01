@@ -59,7 +59,7 @@ function MetricCard({ title, value, delta, deltaPrefix = '', chartData, chartKey
                     <h3 className="text-gray-500 uppercase tracking-wider text-xs font-semibold">{title}</h3>
                 </div>
                 <div className="text-3xl font-bold text-gray-900 tracking-tight mb-2">
-                    {value}{valueSuffix}
+                    {value !== undefined && value !== null ? `${value}${valueSuffix}` : 'N/A'}
                 </div>
 
                 {delta !== undefined && (
@@ -253,7 +253,7 @@ export default function App() {
                 }
 
                 const result = await res.json();
-                setData(result);
+                setData(normalizeData(result));
                 setShowForm(false);
             } else {
                 // Otherwise try to GET the existing
@@ -262,7 +262,7 @@ export default function App() {
                     throw new Error('Company not found and no files provided to analyze.');
                 }
                 const result = await res.json();
-                setData(result);
+                setData(normalizeData(result));
                 setShowForm(false);
             }
         } catch (err: any) {
@@ -280,7 +280,7 @@ export default function App() {
             const res = await fetch(`http://localhost:5050/api/analysis/${encodeURIComponent(cName)}`);
             if (!res.ok) throw new Error('Failed to load past analysis');
             const result = await res.json();
-            setData(result);
+            setData(normalizeData(result));
             setShowForm(false);
         } catch (err: any) {
             setError(err.message);
@@ -290,8 +290,20 @@ export default function App() {
     };
 
 
+    const normalizeData = (result: any) => {
+        if (result && result.financial_data) {
+            result.financial_data = result.financial_data.map((d: any) => {
+                if (!d.financial_health && (d.general_financials || d.loan_book || d.capital_and_funding)) {
+                    d.financial_health = { ...(d.general_financials || {}), ...(d.loan_book || {}), ...(d.capital_and_funding || {}) };
+                }
+                return d;
+            });
+        }
+        return result;
+    };
+
     // Safe accessor helpers
-    const getLatest = (arr) => arr && arr.length > 0 ? arr[arr.length - 1] : {};
+    const getLatest = (arr: any) => arr && arr.length > 0 ? arr[arr.length - 1] : {};
     const getFirst = (arr) => arr && arr.length > 0 ? arr[0] : {};
     const calcDelta = (latest, first) => latest && first && first !== 0 ? ((latest - first) / first) * 100 : 0;
 
@@ -474,33 +486,33 @@ export default function App() {
                         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                             <MetricCard
                                 title="Revenue"
-                                value={latestFin?.general_financials?.revenue}
-                                delta={calcDelta(latestFin?.general_financials?.revenue, firstFin?.general_financials?.revenue)}
-                                chartData={data.financial_data.map(d => ({ name: d.year, val: d.general_financials?.revenue }))}
+                                value={latestFin?.financial_health?.revenue}
+                                delta={calcDelta(latestFin?.financial_health?.revenue, firstFin?.financial_health?.revenue)}
+                                chartData={data.financial_data.map(d => ({ name: d.year, val: d.financial_health?.revenue }))}
                                 chartKey="val"
                                 baselineYear={firstFin?.year}
                             />
                             <MetricCard
                                 title="EBITDA"
-                                value={latestFin?.general_financials?.ebitda}
-                                delta={calcDelta(latestFin?.general_financials?.ebitda, firstFin?.general_financials?.ebitda)}
-                                chartData={data.financial_data.map(d => ({ name: d.year, val: d.general_financials?.ebitda }))}
+                                value={latestFin?.financial_health?.ebitda}
+                                delta={calcDelta(latestFin?.financial_health?.ebitda, firstFin?.financial_health?.ebitda)}
+                                chartData={data.financial_data.map(d => ({ name: d.year, val: d.financial_health?.ebitda }))}
                                 chartKey="val"
                                 baselineYear={firstFin?.year}
                             />
                             <MetricCard
                                 title="PAT"
-                                value={latestFin?.general_financials?.pat}
-                                delta={calcDelta(latestFin?.general_financials?.pat, firstFin?.general_financials?.pat)}
-                                chartData={data.financial_data.map(d => ({ name: d.year, val: d.general_financials?.pat }))}
+                                value={latestFin?.financial_health?.pat}
+                                delta={calcDelta(latestFin?.financial_health?.pat, firstFin?.financial_health?.pat)}
+                                chartData={data.financial_data.map(d => ({ name: d.year, val: d.financial_health?.pat }))}
                                 chartKey="val"
                                 baselineYear={firstFin?.year}
                             />
                             <MetricCard
                                 title="Total Equity"
-                                value={latestFin?.capital_and_funding?.total_equity}
-                                delta={calcDelta(latestFin?.capital_and_funding?.total_equity, firstFin?.capital_and_funding?.total_equity)}
-                                chartData={data.financial_data.map(d => ({ name: d.year, val: d.capital_and_funding?.total_equity }))}
+                                value={latestFin?.financial_health?.total_equity}
+                                delta={calcDelta(latestFin?.financial_health?.total_equity, firstFin?.financial_health?.total_equity)}
+                                chartData={data.financial_data.map(d => ({ name: d.year, val: d.financial_health?.total_equity }))}
                                 chartKey="val"
                                 baselineYear={firstFin?.year}
                             />
@@ -511,7 +523,7 @@ export default function App() {
                                         <h3 className="text-gray-500 uppercase tracking-wider text-xs font-semibold">Credit Rating</h3>
                                     </div>
                                     <div className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight mb-2 break-words leading-tight pr-2">
-                                        {latestFin?.capital_and_funding?.credit_rating || 'N/A'}
+                                        {latestFin?.financial_health?.credit_rating || 'N/A'}
                                     </div>
                                 </div>
                                 <div className="flex gap-1.5 mt-4 items-end">
@@ -519,7 +531,7 @@ export default function App() {
                                         <div key={i} className="group relative flex-1">
                                             <div className="h-2 rounded-full bg-gray-200 w-full transition-colors hover:bg-gray-400 cursor-pointer"></div>
                                             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs text-white whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">
-                                                {d.year}: {d.capital_and_funding?.credit_rating || 'N/A'}
+                                                {d.year}: {d.financial_health?.credit_rating || 'N/A'}
                                             </div>
                                         </div>
                                     ))}
@@ -537,32 +549,32 @@ export default function App() {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <MetricCard
                                 title="Net Interest Margin"
-                                value={latestFin?.loan_book?.nim_percent}
+                                value={latestFin?.financial_health?.nim_percent}
                                 isRatio={true}
-                                delta={latestFin?.loan_book?.nim_percent - firstFin?.loan_book?.nim_percent}
+                                delta={latestFin?.financial_health?.nim_percent - firstFin?.financial_health?.nim_percent}
                                 deltaPrefix="+"
-                                chartData={data.financial_data.map((d: any) => ({ name: d.year, val: d.loan_book?.nim_percent }))}
+                                chartData={data.financial_data.map((d: any) => ({ name: d.year, val: d.financial_health?.nim_percent }))}
                                 chartKey="val"
                                 isNegativeGood={false}
                                 baselineYear={firstFin?.year}
                             />
                             <MetricCard
                                 title="Cost-to-Income"
-                                value={latestFin?.general_financials?.cost_to_income_ratio_percent}
+                                value={latestFin?.financial_health?.cost_to_income_ratio_percent}
                                 isRatio={true}
-                                delta={latestFin?.general_financials?.cost_to_income_ratio_percent - firstFin?.general_financials?.cost_to_income_ratio_percent}
+                                delta={latestFin?.financial_health?.cost_to_income_ratio_percent - firstFin?.financial_health?.cost_to_income_ratio_percent}
                                 deltaPrefix="+"
-                                chartData={data.financial_data.map((d: any) => ({ name: d.year, val: d.general_financials?.cost_to_income_ratio_percent }))}
+                                chartData={data.financial_data.map((d: any) => ({ name: d.year, val: d.financial_health?.cost_to_income_ratio_percent }))}
                                 chartKey="val"
                                 isNegativeGood={true}
                                 baselineYear={firstFin?.year}
                             />
                             <MetricCard
                                 title="GNPA Ratio"
-                                value={latestFin?.loan_book?.npl_ratio_percent || latestFin?.loan_book?.gnpa_percent}
+                                value={latestFin?.financial_health?.npl_ratio_percent || latestFin?.financial_health?.gnpa_percent}
                                 isRatio={true}
-                                delta={(latestFin?.loan_book?.npl_ratio_percent || latestFin?.loan_book?.gnpa_percent) - (firstFin?.loan_book?.npl_ratio_percent || firstFin?.loan_book?.gnpa_percent)}
-                                chartData={data.financial_data.map((d: any) => ({ name: d.year, val: d.loan_book?.npl_ratio_percent || d.loan_book?.gnpa_percent }))}
+                                delta={(latestFin?.financial_health?.npl_ratio_percent || latestFin?.financial_health?.gnpa_percent) - (firstFin?.financial_health?.npl_ratio_percent || firstFin?.financial_health?.gnpa_percent)}
+                                chartData={data.financial_data.map((d: any) => ({ name: d.year, val: d.financial_health?.npl_ratio_percent || d.financial_health?.gnpa_percent }))}
                                 chartKey="val"
                                 isNegativeGood={true}
                                 baselineYear={firstFin?.year}
@@ -589,31 +601,23 @@ export default function App() {
                                     </thead>
                                     <tbody className="text-sm divide-y divide-gray-50">
                                         <tr className="hover:bg-gray-50/50 transition-colors group">
-                                            <td className="p-5 text-gray-600 font-medium">Loan Outstanding</td>
+                                            <td className="p-5 text-gray-600 font-medium">Gross Loan Portfolio</td>
                                             {data.financial_data.map((d: any, i: number) => (
                                                 <td key={d.year} className="p-5 text-right font-semibold text-gray-900">
-                                                    {d.loan_book?.total_loan_outstanding?.toLocaleString() || '-'}
-                                                    {i > 0 && <YoYBadge current={d.loan_book?.total_loan_outstanding} previous={data.financial_data[i - 1].loan_book?.total_loan_outstanding} isNegativeGood={false} />}
+                                                    {d.financial_health?.total_loan_outstanding?.toLocaleString() || '-'}
+                                                    {i > 0 && <YoYBadge current={d.financial_health?.total_loan_outstanding} previous={data.financial_data[i - 1].financial_health?.total_loan_outstanding} isNegativeGood={false} />}
                                                 </td>
                                             ))}
                                         </tr>
-                                        <tr className="hover:bg-gray-50/50 transition-colors group">
-                                            <td className="p-5 text-gray-600 font-medium">AUM</td>
-                                            {data.financial_data.map((d: any, i: number) => (
-                                                <td key={d.year} className="p-5 text-right font-semibold text-gray-900">
-                                                    {d.loan_book?.aum?.toLocaleString() || '-'}
-                                                    {i > 0 && <YoYBadge current={d.loan_book?.aum} previous={data.financial_data[i - 1].loan_book?.aum} isNegativeGood={false} />}
-                                                </td>
-                                            ))}
-                                        </tr>
+
                                         <tr className="hover:bg-gray-50/50 transition-colors group">
                                             <td className="p-5 text-gray-600 font-medium">GNPA / NPL (%)</td>
                                             {data.financial_data.map((d: any, i: number) => {
-                                                const val = d.loan_book?.npl_ratio_percent || d.loan_book?.gnpa_percent;
-                                                const prevVal = data.financial_data[i - 1]?.loan_book?.npl_ratio_percent || data.financial_data[i - 1]?.loan_book?.gnpa_percent;
+                                                const val = d.financial_health?.npl_ratio_percent !== undefined ? d.financial_health.npl_ratio_percent : d.financial_health?.gnpa_percent;
+                                                const prevVal = data.financial_data[i - 1]?.financial_health?.npl_ratio_percent !== undefined ? data.financial_data[i - 1].financial_health.npl_ratio_percent : data.financial_data[i - 1]?.financial_health?.gnpa_percent;
                                                 return <td key={d.year} className="p-5 text-right font-semibold text-gray-900">
-                                                    {val !== undefined && val !== null ? `${val}%` : '-'}
-                                                    {i > 0 && <YoYBadge current={val} previous={prevVal} isRatio={true} isNegativeGood={true} />}
+                                                    {val !== undefined && val !== null ? `${val}%` : 'N/A'}
+                                                    {i > 0 && val !== undefined && val !== null && <YoYBadge current={val} previous={prevVal} isRatio={true} isNegativeGood={true} />}
                                                 </td>;
                                             })}
                                         </tr>
@@ -621,8 +625,8 @@ export default function App() {
                                             <td className="p-5 text-gray-600 font-medium">PAR 30 (%)</td>
                                             {data.financial_data.map((d: any, i: number) => (
                                                 <td key={d.year} className="p-5 text-right font-semibold text-gray-900">
-                                                    {d.loan_book?.par_30_percent !== undefined && d.loan_book?.par_30_percent !== null ? `${d.loan_book.par_30_percent}%` : '-'}
-                                                    {i > 0 && <YoYBadge current={d.loan_book?.par_30_percent} previous={data.financial_data[i - 1].loan_book?.par_30_percent} isRatio={true} isNegativeGood={true} />}
+                                                    {d.financial_health?.par_30_percent !== undefined && d.financial_health?.par_30_percent !== null ? `${d.financial_health.par_30_percent}%` : 'N/A'}
+                                                    {i > 0 && d.financial_health?.par_30_percent !== undefined && d.financial_health?.par_30_percent !== null && <YoYBadge current={d.financial_health?.par_30_percent} previous={data.financial_data[i - 1].financial_health?.par_30_percent} isRatio={true} isNegativeGood={true} />}
                                                 </td>
                                             ))}
                                         </tr>
@@ -630,8 +634,8 @@ export default function App() {
                                             <td className="p-5 text-gray-600 font-medium">Provision Coverage (%)</td>
                                             {data.financial_data.map((d: any, i: number) => (
                                                 <td key={d.year} className="p-5 text-right font-semibold text-gray-900">
-                                                    {d.loan_book?.provision_coverage_percent !== undefined && d.loan_book?.provision_coverage_percent !== null ? `${d.loan_book.provision_coverage_percent}%` : '-'}
-                                                    {i > 0 && <YoYBadge current={d.loan_book?.provision_coverage_percent} previous={data.financial_data[i - 1].loan_book?.provision_coverage_percent} isRatio={true} isNegativeGood={false} />}
+                                                    {d.financial_health?.provision_coverage_percent !== undefined && d.financial_health?.provision_coverage_percent !== null ? `${d.financial_health.provision_coverage_percent}%` : 'N/A'}
+                                                    {i > 0 && d.financial_health?.provision_coverage_percent !== undefined && d.financial_health?.provision_coverage_percent !== null && <YoYBadge current={d.financial_health?.provision_coverage_percent} previous={data.financial_data[i - 1].financial_health?.provision_coverage_percent} isRatio={true} isNegativeGood={false} />}
                                                 </td>
                                             ))}
                                         </tr>
@@ -639,8 +643,8 @@ export default function App() {
                                             <td className="p-5 text-gray-600 font-medium">Disbursals</td>
                                             {data.financial_data.map((d: any, i: number) => (
                                                 <td key={d.year} className="p-5 text-right font-semibold text-gray-900">
-                                                    {d.capital_and_funding?.disbursals?.toLocaleString() || '-'}
-                                                    {i > 0 && <YoYBadge current={d.capital_and_funding?.disbursals} previous={data.financial_data[i - 1].capital_and_funding?.disbursals} isNegativeGood={false} />}
+                                                    {d.financial_health?.disbursals?.toLocaleString() || '-'}
+                                                    {i > 0 && <YoYBadge current={d.financial_health?.disbursals} previous={data.financial_data[i - 1].financial_health?.disbursals} isNegativeGood={false} />}
                                                 </td>
                                             ))}
                                         </tr>
@@ -659,20 +663,20 @@ export default function App() {
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <MetricCard
                                 title="Profit Margin"
-                                value={latestFin?.general_financials?.profit_margin_percent}
+                                value={latestFin?.financial_health?.profit_margin_percent}
                                 isRatio={true}
-                                delta={latestFin?.general_financials?.profit_margin_percent - firstFin?.general_financials?.profit_margin_percent}
-                                chartData={data.financial_data.map(d => ({ name: d.year, val: d.general_financials?.profit_margin_percent }))}
+                                delta={latestFin?.financial_health?.profit_margin_percent - firstFin?.financial_health?.profit_margin_percent}
+                                chartData={data.financial_data.map(d => ({ name: d.year, val: d.financial_health?.profit_margin_percent }))}
                                 chartKey="val"
                                 baselineYear={firstFin?.year}
                             />
                             <MetricCard
                                 title="CAR Tier 1"
-                                value={latestFin?.capital_and_funding?.car_tier_1_percent}
+                                value={latestFin?.financial_health?.car_tier_1_percent}
                                 isRatio={true}
-                                delta={latestFin?.capital_and_funding?.car_tier_1_percent - firstFin?.capital_and_funding?.car_tier_1_percent}
+                                delta={latestFin?.financial_health?.car_tier_1_percent - firstFin?.financial_health?.car_tier_1_percent}
                                 deltaPrefix="+"
-                                chartData={data.financial_data.map(d => ({ name: d.year, val: d.capital_and_funding?.car_tier_1_percent }))}
+                                chartData={data.financial_data.map(d => ({ name: d.year, val: d.financial_health?.car_tier_1_percent }))}
                                 chartKey="val"
                                 isNegativeGood={false}
                                 baselineYear={firstFin?.year}
@@ -685,16 +689,16 @@ export default function App() {
                                     <div className="flex gap-8 mt-2">
                                         <div>
                                             <div className="text-xs text-gray-500 font-semibold mb-1 uppercase tracking-wider">ROE</div>
-                                            <div className="text-3xl font-bold text-gray-900 tracking-tight">{latestFin?.general_financials?.roe_percent}%</div>
+                                            <div className="text-3xl font-bold text-gray-900 tracking-tight">{latestFin?.financial_health?.roe_percent !== undefined && latestFin?.financial_health?.roe_percent !== null ? `${latestFin.financial_health.roe_percent}%` : 'N/A'}</div>
                                         </div>
                                         <div>
                                             <div className="text-xs text-gray-500 font-semibold mb-1 uppercase tracking-wider">ROA</div>
-                                            <div className="text-3xl font-bold text-gray-900 tracking-tight">{latestFin?.general_financials?.roa_percent}%</div>
+                                            <div className="text-3xl font-bold text-gray-900 tracking-tight">{latestFin?.financial_health?.roa_percent !== undefined && latestFin?.financial_health?.roa_percent !== null ? `${latestFin.financial_health.roa_percent}%` : 'N/A'}</div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            <RatioBar ratio={parseFloat(latestFin?.capital_and_funding?.depositors_vs_borrowers_ratio) || 0.55} />
+                            <RatioBar ratio={parseFloat(latestFin?.financial_health?.depositors_vs_borrowers_ratio) || 0.55} />
                         </div>
                     </div>
 

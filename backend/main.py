@@ -73,17 +73,29 @@ async def analyze_company(
         financial_data = result_data.get("financial_data", [])
         anomalies_and_risks = result_data.get("anomalies_and_risks", [])
         currency = result_data.get("currency", "USD")
+        company_overview = result_data.get("company_overview", {})
+        quality_of_it = result_data.get("quality_of_it", {})
+        macroeconomic_geo_view = result_data.get("macroeconomic_geo_view", {})
+        competitive_position = result_data.get("competitive_position", {})
+        management_quality = result_data.get("management_quality", {})
         
         logger.info(f"[ANALYZE] Extracted: currency='{currency}', financial_data_items={len(financial_data)}, risks_items={len(anomalies_and_risks)}")
         
         # Save to DB (INSERT OR REPLACE will overwrite existing records)
-        save_analysis(company_name, financial_data, anomalies_and_risks, currency)
+        save_analysis(company_name, financial_data, anomalies_and_risks, currency, 
+                      company_overview, quality_of_it, macroeconomic_geo_view, 
+                      competitive_position, management_quality)
         
         response = {
             "company_name": company_name,
             "currency": currency,
             "financial_data": financial_data,
-            "anomalies_and_risks": anomalies_and_risks
+            "anomalies_and_risks": anomalies_and_risks,
+            "company_overview": company_overview,
+            "quality_of_it": quality_of_it,
+            "macroeconomic_geo_view": macroeconomic_geo_view,
+            "competitive_position": competitive_position,
+            "management_quality": management_quality
         }
         logger.info(f"[ANALYZE] Returning response with currency='{response['currency']}'")
         return response
