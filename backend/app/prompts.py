@@ -20,24 +20,24 @@ Task: Perform a comprehensive forensic analysis of the provided Annual Reports. 
 
 Extract values for ALL years present in the reports. Determine the primary reporting currency (e.g., "EURm", "USDm", "NGNm").
 
-1. Build company_overview (extract once for the entire organisation):
+1. Build company_overview (extract once based on the highest year available):
    - Description of products and services
    - Countries of operation
    - Management team (CEO, CFO, CTO, CRO/Head of Risk only)
    - Shareholder structure (major shareholders + ownership %)
    - Strategic Partners (IFIs: World Bank, IFC, EBRD; major tech/funding partners)
-   - Revenue by segment/geography (use the LATEST year available)
+   - Revenue by Subsidiaries or country if Subsidiaries are not available
    - Operational Scale for the LATEST year only:
      * Number of branches (physical only, exclude POS or agents)
      * Number of employees / FTEs
-     * Number of active borrowers / customers
+     * Number of customers
 
 2. For EACH YEAR extract:
    Financial Health:
    - Revenue (Total Operating Revenue)
    - PAT (Net Income)
-   - EBITDA (= Net income + Tax on profits + Net interests + Operating allowances – approximate)
-   - Total Assets
+   - EBITDA (= Net income + Tax on profits + Net interests + Operating allowances) before the calcuation if the value is not directly avaliable
+   - Total Assets 
    - Total Operating Expenses
    - Net Interests
    - Gross Loan Portfolio (gross outstanding + accrued interest)

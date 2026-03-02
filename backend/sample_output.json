@@ -66,21 +66,21 @@
             "Mastercard Foundation",
             "Orange (Mobile Money)"
         ],
-        "revenue_by_segment_or_geography": [
+        "revenue_by_subsidiaries_or_country": [
             {
-                "segment_name": "West Africa",
+                "subsidiary_or_country": "West Africa",
                 "revenue": 195.2
             },
             {
-                "segment_name": "East Africa & Madagascar",
+                "subsidiary_or_country": "East Africa & Madagascar",
                 "revenue": 98.4
             },
             {
-                "segment_name": "Central Africa",
+                "subsidiary_or_country": "Central Africa",
                 "revenue": 57.1
             },
             {
-                "segment_name": "North Africa & China",
+                "subsidiary_or_country": "North Africa & China",
                 "revenue": 47.8
             }
         ],
@@ -120,7 +120,7 @@
                 "gnpa_percent": 3.0,
                 "provision_coverage_percent": 3.51,
                 "car_tier_1_percent": 16.01,
-                "depositors_vs_borrowers_ratio": "1.36",
+                "depositors_vs_borrowers_ratio": 1.36,
                 "total_loan_outstanding": 1589.0
             }
         },
@@ -153,7 +153,7 @@
                 "gnpa_percent": 2.8,
                 "provision_coverage_percent": 3.23,
                 "car_tier_1_percent": 15.14,
-                "depositors_vs_borrowers_ratio": "1.41",
+                "depositors_vs_borrowers_ratio": 1.41,
                 "total_loan_outstanding": 1923.0
             }
         },
@@ -186,7 +186,7 @@
                 "gnpa_percent": 2.9,
                 "provision_coverage_percent": 3.24,
                 "car_tier_1_percent": 14.44,
-                "depositors_vs_borrowers_ratio": "1.47",
+                "depositors_vs_borrowers_ratio": 1.47,
                 "total_loan_outstanding": 2268.0
             }
         }

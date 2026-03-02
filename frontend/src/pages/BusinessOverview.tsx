@@ -9,7 +9,7 @@ export default function BusinessOverview({ data }: { data: AnalysisData }) {
     const mgmt = data.management_quality ?? [];
     const geo = data.macroeconomic_geo_view ?? [];
     const partners = ov?.strategic_partners ?? [];
-    const segments = ov?.revenue_by_segment_or_geography ?? [];
+    const subsidiaries = ov?.revenue_by_subsidiaries_or_country ?? [];
     const scale = ov?.operational_scale;
     const it = data.quality_of_it;
     const competitive = data.competitive_position;
@@ -58,21 +58,22 @@ export default function BusinessOverview({ data }: { data: AnalysisData }) {
                         </div>
                     )}
 
-                    {/* Revenue by Segment */}
-                    {segments.length > 0 && (
+                    {/* Revenue by Subsidiaries or Country */}
+                    {subsidiaries.length > 0 && (
                         <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-                            <h4 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Revenue by Segment ({data.currency})</h4>
+                            <h4 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Revenue by Subsidiaries / Country ({data.currency})</h4>
                             <div className="h-44">
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={segments} layout="vertical" margin={{ left: 10, right: 20 }}>
+                                    <BarChart data={subsidiaries} layout="vertical" margin={{ left: 10, right: 20 }}>
                                         <XAxis type="number" tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-                                        <YAxis type="category" dataKey="segment_name" width={120} tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false} />
+                                        <YAxis type="category" dataKey="subsidiary_or_country" width={120} tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false} />
                                         <Tooltip
-                                            contentStyle={{ backgroundColor: '#1e293b', borderRadius: '8px', border: 'none', color: '#fff', fontSize: '12px' }}
+                                            contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#0f172a', fontSize: '12px', padding: '8px 12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)' }}
+                                            itemStyle={{ color: '#0f172a', fontWeight: 500, padding: 0 }}
                                             formatter={(v: any) => [`${v} ${data.currency}`, 'Revenue']}
                                         />
                                         <Bar dataKey="revenue" radius={[0, 6, 6, 0]}>
-                                            {segments.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                                            {subsidiaries.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                                         </Bar>
                                     </BarChart>
                                 </ResponsiveContainer>
@@ -130,7 +131,8 @@ export default function BusinessOverview({ data }: { data: AnalysisData }) {
                                             {shareholders.map((s, i) => <Cell key={i} fill={s.color} />)}
                                         </Pie>
                                         <Tooltip
-                                            contentStyle={{ backgroundColor: '#1e293b', borderRadius: '8px', border: 'none', color: '#fff', fontSize: '11px' }}
+                                            contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#0f172a', fontSize: '12px', padding: '8px 12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)' }}
+                                            itemStyle={{ color: '#0f172a', fontWeight: 500, padding: 0 }}
                                             formatter={(v: any) => [`${v}%`, 'Ownership']}
                                         />
                                     </PieChart>

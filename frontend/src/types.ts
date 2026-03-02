@@ -1,7 +1,7 @@
 // TypeScript interfaces matching the backend sample_output.json shape
 
-export interface SegmentRevenue {
-    segment_name: string;
+export interface SubsidiaryRevenue {
+    subsidiary_or_country: string;
     revenue: number;
 }
 
@@ -27,7 +27,7 @@ export interface CompanyOverview {
     management_team?: ManagementMember[];
     shareholder_structure?: Shareholder[];
     strategic_partners?: string[];
-    revenue_by_segment_or_geography?: SegmentRevenue[];
+    revenue_by_subsidiaries_or_country?: SubsidiaryRevenue[];
     operational_scale?: OperationalScale;
 }
 
@@ -59,7 +59,7 @@ export interface FinancialHealth {
     gnpa_percent?: number;
     provision_coverage_percent?: number;
     car_tier_1_percent?: number;
-    depositors_vs_borrowers_ratio?: string;
+    depositors_vs_borrowers_ratio?: number;
     total_loan_outstanding?: number;
 }
 

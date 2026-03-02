@@ -46,7 +46,7 @@ export default function FinancialHealth({ data }: { data: AnalysisData }) {
                                 <div key={i} className="group relative flex-1">
                                     <div className="h-2 rounded-full bg-gray-200 w-full hover:bg-gray-400 cursor-pointer transition-colors" />
                                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 rounded text-[10px] text-white whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">
-                                        FY {d.year}: {d.financial_health?.credit_rating || 'N/A'}
+                                        {d.year}: {d.financial_health?.credit_rating || 'N/A'}
                                     </div>
                                 </div>
                             ))}
@@ -72,7 +72,7 @@ export default function FinancialHealth({ data }: { data: AnalysisData }) {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
                     <MetricCard title="Net Interest Margin" value={lf?.nim_percent} isRatio delta={ppDelta(lf?.nim_percent, ff?.nim_percent)} chartData={chartOf('nim_percent')} baselineYear={firstYear} latestYear={latYear} />
                     <MetricCard title="CAR Tier 1" value={lf?.car_tier_1_percent} isRatio delta={ppDelta(lf?.car_tier_1_percent, ff?.car_tier_1_percent)} chartData={chartOf('car_tier_1_percent')} baselineYear={firstYear} latestYear={latYear} />
-                    <RatioBar ratio={parseFloat(lf?.depositors_vs_borrowers_ratio ?? '0') || 0} />
+                    <RatioBar ratio={lf?.depositors_vs_borrowers_ratio ?? 0} />
                 </div>
 
                 {/* Loan Book Table */}

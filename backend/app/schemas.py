@@ -54,16 +54,16 @@ COMPANY_OVERVIEW_SCHEMA = {
             "description": "e.g., World Bank, IFC, EBRD, major tech or financial partners.",
             "items": {"type": "STRING"},
         },
-        "revenue_by_segment_or_geography": {
+        "revenue_by_subsidiaries_or_country": {
             "type": "ARRAY",
-            "description": "Revenue breakdown by business segment or geographic region (latest available year).",
+            "description": "Revenue breakdown by subsidiaries or country if subsidiaries are not available (latest available year).",
             "items": {
                 "type": "OBJECT",
                 "properties": {
-                    "segment_name": {"type": "STRING"},
-                    "revenue":      {"type": "NUMBER"},
+                    "subsidiary_or_country": {"type": "STRING"},
+                    "revenue":               {"type": "NUMBER"},
                 },
-                "required": ["segment_name", "revenue"],
+                "required": ["subsidiary_or_country", "revenue"],
             },
         },
         "operational_scale": {

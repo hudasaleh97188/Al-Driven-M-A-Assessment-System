@@ -59,8 +59,9 @@ export default function MetricCard({
                             <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
                             <Tooltip
                                 cursor={{ fill: 'rgba(0,0,0,0.03)' }}
-                                contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '10px', color: '#fff', fontSize: '12px', padding: '8px 12px', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}
-                                labelStyle={{ fontWeight: 600, marginBottom: '2px', color: '#94a3b8' }}
+                                contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#0f172a', fontSize: '12px', padding: '8px 12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)' }}
+                                itemStyle={{ color: '#0f172a', fontWeight: 500, padding: 0 }}
+                                labelStyle={{ fontWeight: 600, color: '#64748b', marginBottom: '4px' }}
                                 labelFormatter={(label) => `${label}`}
                                 formatter={(v: any) => [typeof v === 'number' ? `${v.toLocaleString()}${valueSuffix}` : v, title]}
                             />

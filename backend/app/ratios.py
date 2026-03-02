@@ -32,7 +32,6 @@ def compute_ratios(financial_health: dict) -> dict:
     provision_coverage_percent  = Provisions / Gross Loan Portfolio × 100
     car_tier_1_percent          = Tier 1 Capital / Risk-Weighted Assets × 100
     depositors_vs_borrowers_ratio = Debts to Clients / Debts to FIs (string, 2dp)
-    total_loan_outstanding      = alias for gross_loan_portfolio (frontend mapping)
     """
     fh = financial_health  # alias for brevity
 
@@ -67,7 +66,7 @@ def compute_ratios(financial_health: dict) -> dict:
 
     dep_borr = safe_divide(debts_clients, debts_fi)
     if dep_borr is not None:
-        fh["depositors_vs_borrowers_ratio"] = str(round(dep_borr, 2))
+        fh["depositors_vs_borrowers_ratio"] = round(dep_borr, 2)
 
     return fh
 

@@ -150,7 +150,7 @@ export default function App() {
                                 )}
                                 {data.financial_data?.length > 0 && (
                                     <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">
-                                        FY {data.financial_data[0].year} – {data.financial_data[data.financial_data.length - 1].year}
+                                        {data.financial_data[0].year} – {data.financial_data[data.financial_data.length - 1].year}
                                     </span>
                                 )}
                                 {data.company_overview?.operational_scale?.number_of_employees && (
