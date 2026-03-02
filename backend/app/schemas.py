@@ -1,0 +1,278 @@
+"""
+schemas.py
+----------
+Gemini structured-output schemas for all three pipeline stages.
+
+Stage 1 – Base PDF extraction  (STAGE1_SCHEMA)
+Stage 2 – Web enrichment + IT  (STAGE2_SCHEMA)
+Stage 3 – Macro + Management   (STAGE3_SCHEMA)
+"""
+
+# ---------------------------------------------------------------------------
+# Shared sub-schemas (reused across stages)
+# ---------------------------------------------------------------------------
+
+_MANAGEMENT_TEAM_ITEM = {
+    "type": "OBJECT",
+    "properties": {
+        "name":     {"type": "STRING"},
+        "position": {"type": "STRING"},
+    },
+    "required": ["name", "position"],
+}
+
+_SHAREHOLDER_ITEM = {
+    "type": "OBJECT",
+    "properties": {
+        "name":                 {"type": "STRING"},
+        "ownership_percentage": {"type": "NUMBER"},
+    },
+    "required": ["name"],
+}
+
+COMPANY_OVERVIEW_SCHEMA = {
+    "type": "OBJECT",
+    "description": "High-level qualitative information about the company's operations, leadership, and structure.",
+    "properties": {
+        "description_of_products_and_services": {"type": "STRING"},
+        "countries_of_operation": {
+            "type": "ARRAY",
+            "items": {"type": "STRING"},
+        },
+        "management_team": {
+            "type": "ARRAY",
+            "description": "Focus strictly on CEO, CFO, CTO, and CRO (or Head of Risk).",
+            "items": _MANAGEMENT_TEAM_ITEM,
+        },
+        "shareholder_structure": {
+            "type": "ARRAY",
+            "description": "Major shareholders and ownership percentage.",
+            "items": _SHAREHOLDER_ITEM,
+        },
+        "strategic_partners": {
+            "type": "ARRAY",
+            "description": "e.g., World Bank, IFC, EBRD, major tech or financial partners.",
+            "items": {"type": "STRING"},
+        },
+        "revenue_by_segment_or_geography": {
+            "type": "ARRAY",
+            "description": "Revenue breakdown by business segment or geographic region (latest available year).",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "segment_name": {"type": "STRING"},
+                    "revenue":      {"type": "NUMBER"},
+                },
+                "required": ["segment_name", "revenue"],
+            },
+        },
+        "operational_scale": {
+            "type": "OBJECT",
+            "description": "Operational footprint and scale indicators (latest available year)",
+            "properties": {
+                "number_of_branches": {
+                    "type": "INTEGER",
+                    "description": "Total number of physical branches (excluding light sales points/agents)",
+                },
+                "number_of_employees": {
+                    "type": "INTEGER",
+                    "description": "Total staff headcount at year-end",
+                },
+                "number_of_borrowers": {
+                    "type": "INTEGER",
+                    "description": "Total number of active customers/borrowers",
+                },
+            },
+        },
+    },
+}
+
+_FINANCIAL_DATA_ITEM = {
+    "type": "OBJECT",
+    "properties": {
+        "year": {"type": "INTEGER"},
+        "financial_health": {
+            "type": "OBJECT",
+            "properties": {
+                "revenue": {
+                    "type": "NUMBER",
+                    "description": "Total Operating Revenue",
+                },
+                "ebitda": {
+                    "type": "NUMBER",
+                    "description": (
+                        "Earnings before interest, tax, depreciation and amortisation. "
+                        "Formula: Net income + Tax on profits + Net interests + Operating allowances"
+                    ),
+                },
+                "pat":   {"type": "NUMBER", "description": "Net Income"},
+                "total_assets": {"type": "NUMBER"},
+                "total_operating_expenses": {"type": "NUMBER"},
+                "net_interests": {"type": "NUMBER"},
+                "gross_loan_portfolio": {
+                    "type": "NUMBER",
+                    "description": "Loans gross outstanding and accrued interest",
+                },
+                "loans_with_arrears_over_30_days": {"type": "NUMBER"},
+                "gross_non_performing_loans": {
+                    "type": "NUMBER",
+                    "description": "Gross non-performing loans (usually 90+ days past due) or NPL",
+                },
+                "total_loan_loss_provisions": {"type": "NUMBER"},
+                "total_equity": {
+                    "type": "NUMBER",
+                    "description": "Company's accounting net worth (assets minus liabilities)",
+                },
+                "tier_1_capital": {"type": "NUMBER"},
+                "risk_weighted_assets": {"type": "NUMBER"},
+                "disbursals": {
+                    "type": "NUMBER",
+                    "description": "Loans disbursed during the year",
+                },
+                "debts_to_clients": {
+                    "type": "NUMBER",
+                    "description": "Customer deposits",
+                },
+                "debts_to_financial_institutions": {
+                    "type": "NUMBER",
+                    "description": "Borrowings from financial institutions",
+                },
+                "credit_rating": {"type": "STRING"},
+            },
+        },
+    },
+    "required": ["year"],
+}
+
+_ANOMALY_ITEM = {
+    "type": "OBJECT",
+    "properties": {
+        "category": {
+            "type": "STRING",
+            "description": "e.g., 'Regulatory Compliance', 'Financial Anomaly', 'Operational Risk'",
+        },
+        "description": {
+            "type": "STRING",
+            "description": "Details of the anomaly or the specific regulatory breach.",
+        },
+        "severity_level": {
+            "type": "STRING",
+            "description": "Low, Medium, High, or Critical",
+        },
+        "valuation_impact": {
+            "type": "STRING",
+            "description": "How this specific issue affects the company's valuation.",
+        },
+        "negotiation_leverage": {
+            "type": "STRING",
+            "description": "How to use this point during M&A negotiations.",
+        },
+    },
+    "required": ["category", "description", "severity_level", "valuation_impact", "negotiation_leverage"],
+}
+
+# ---------------------------------------------------------------------------
+# Stage 1 – Base PDF extraction
+# ---------------------------------------------------------------------------
+
+STAGE1_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "company_name": {"type": "STRING"},
+        "currency": {
+            "type": "STRING",
+            "description": "e.g., USDm, EURm",
+        },
+        "company_overview": COMPANY_OVERVIEW_SCHEMA,
+        "financial_data": {
+            "type": "ARRAY",
+            "description": "Time-series data, one entry per year.",
+            "items": _FINANCIAL_DATA_ITEM,
+        },
+        "anomalies_and_risks": {
+            "type": "ARRAY",
+            "description": "Combined M&A red flags, financial anomalies, and regulatory compliance checks.",
+            "items": _ANOMALY_ITEM,
+        },
+    },
+    "required": ["company_name", "currency", "company_overview", "financial_data", "anomalies_and_risks"],
+}
+
+# ---------------------------------------------------------------------------
+# Stage 2 – Web enrichment + IT quality
+# ---------------------------------------------------------------------------
+
+STAGE2_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "company_overview": COMPANY_OVERVIEW_SCHEMA,
+        "financial_data": {
+            "type": "ARRAY",
+            "items": _FINANCIAL_DATA_ITEM,
+        },
+        "quality_of_it": {
+            "type": "OBJECT",
+            "properties": {
+                "core_banking_systems":   {"type": "ARRAY", "items": {"type": "STRING"}},
+                "digital_channel_adoption": {"type": "STRING"},
+                "system_upgrades":        {"type": "ARRAY", "items": {"type": "STRING"}},
+                "vendor_partnerships":    {"type": "ARRAY", "items": {"type": "STRING"}},
+                "cyber_incidents":        {"type": "ARRAY", "items": {"type": "STRING"}},
+            },
+        },
+    },
+    "required": ["company_overview", "financial_data", "quality_of_it"],
+}
+
+# ---------------------------------------------------------------------------
+# Stage 3 – Macro economics + competitive + management deep dive
+# ---------------------------------------------------------------------------
+
+STAGE3_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "macroeconomic_geo_view": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "country":                   {"type": "STRING"},
+                    "gdp_per_capita_ppp":         {"type": "STRING"},
+                    "inflation_projection":       {"type": "STRING"},
+                    "country_risk_score":         {"type": "STRING"},
+                    "corruption_perceptions_index": {"type": "STRING"},
+                    "financial_inclusion_rate":   {"type": "STRING"},
+                    "credit_to_gdp_ratio":        {"type": "STRING"},
+                    "mobile_money_adoption":      {"type": "STRING"},
+                },
+                "required": ["country"],
+            },
+        },
+        "competitive_position": {
+            "type": "OBJECT",
+            "properties": {
+                "market_share_data":                    {"type": "STRING"},
+                "central_bank_sector_reports_summary":  {"type": "STRING"},
+                "industry_studies_summary":             {"type": "STRING"},
+                "customer_growth_or_attrition_news":    {"type": "STRING"},
+            },
+        },
+        "management_quality": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "name":                  {"type": "STRING"},
+                    "position":              {"type": "STRING"},
+                    "previous_experience":   {
+                        "type": "STRING",
+                        "description": "Total years of experience and previous important roles held.",
+                    },
+                    "tenure_history":        {"type": "STRING"},
+                },
+                "required": ["name"],
+            },
+        },
+    },
+    "required": ["macroeconomic_geo_view", "competitive_position", "management_quality"],
+}

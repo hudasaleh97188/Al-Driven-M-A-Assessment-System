@@ -1,0 +1,127 @@
+// TypeScript interfaces matching the backend sample_output.json shape
+
+export interface SegmentRevenue {
+    segment_name: string;
+    revenue: number;
+}
+
+export interface ManagementMember {
+    name: string;
+    position: string;
+}
+
+export interface Shareholder {
+    name: string;
+    ownership_percentage?: number;
+}
+
+export interface OperationalScale {
+    number_of_branches?: number;
+    number_of_employees?: number;
+    number_of_borrowers?: number;
+}
+
+export interface CompanyOverview {
+    description_of_products_and_services?: string;
+    countries_of_operation?: string[];
+    management_team?: ManagementMember[];
+    shareholder_structure?: Shareholder[];
+    strategic_partners?: string[];
+    revenue_by_segment_or_geography?: SegmentRevenue[];
+    operational_scale?: OperationalScale;
+}
+
+export interface FinancialHealth {
+    revenue?: number;
+    ebitda?: number;
+    pat?: number;
+    total_assets?: number;
+    total_operating_expenses?: number;
+    net_interests?: number;
+    gross_loan_portfolio?: number;
+    loans_with_arrears_over_30_days?: number;
+    gross_non_performing_loans?: number;
+    total_loan_loss_provisions?: number;
+    total_equity?: number;
+    tier_1_capital?: number;
+    risk_weighted_assets?: number;
+    disbursals?: number;
+    debts_to_clients?: number;
+    debts_to_financial_institutions?: number;
+    credit_rating?: string;
+    // Computed ratios
+    profit_margin_percent?: number;
+    roe_percent?: number;
+    roa_percent?: number;
+    cost_to_income_ratio_percent?: number;
+    nim_percent?: number;
+    par_30_percent?: number;
+    gnpa_percent?: number;
+    provision_coverage_percent?: number;
+    car_tier_1_percent?: number;
+    depositors_vs_borrowers_ratio?: string;
+    total_loan_outstanding?: number;
+}
+
+export interface FinancialDataYear {
+    year: number;
+    financial_health: FinancialHealth;
+}
+
+export interface AnomalyRisk {
+    category: string;
+    description: string;
+    severity_level: string;
+    valuation_impact: string;
+    negotiation_leverage: string;
+}
+
+export interface QualityOfIT {
+    core_banking_systems?: string[];
+    digital_channel_adoption?: string;
+    system_upgrades?: string[];
+    vendor_partnerships?: string[];
+    cyber_incidents?: string[];
+}
+
+export interface GeoViewCountry {
+    country: string;
+    gdp_per_capita_ppp?: string;
+    inflation_projection?: string;
+    country_risk_score?: string;
+    corruption_perceptions_index?: string;
+    financial_inclusion_rate?: string;
+    credit_to_gdp_ratio?: string;
+    mobile_money_adoption?: string;
+}
+
+export interface CompetitivePosition {
+    market_share_data?: string;
+    central_bank_sector_reports_summary?: string;
+    industry_studies_summary?: string;
+    customer_growth_or_attrition_news?: string;
+}
+
+export interface ManagementQuality {
+    name: string;
+    position?: string;
+    previous_experience?: string;
+    tenure_history?: string;
+}
+
+export interface AnalysisData {
+    company_name: string;
+    currency: string;
+    company_overview: CompanyOverview;
+    financial_data: FinancialDataYear[];
+    anomalies_and_risks: AnomalyRisk[];
+    quality_of_it?: QualityOfIT;
+    macroeconomic_geo_view?: GeoViewCountry[];
+    competitive_position?: CompetitivePosition;
+    management_quality?: ManagementQuality[];
+}
+
+export interface AnalysisListItem {
+    company_name: string;
+    analyzed_at: string;
+}

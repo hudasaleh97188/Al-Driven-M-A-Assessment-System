@@ -1,0 +1,83 @@
+import { TrendingUp, TrendingDown } from 'lucide-react';
+import { BarChart, Bar, Cell, Tooltip, ResponsiveContainer, XAxis } from 'recharts';
+
+interface MetricCardProps {
+    title: string;
+    value?: number | string | null;
+    delta?: number;
+    isRatio?: boolean;
+    isNegativeGood?: boolean;
+    chartData?: { name: number | string; val: number | null }[];
+    chartKey?: string;
+    baselineYear?: number;
+    suffix?: string;
+    latestYear?: number;
+}
+
+export default function MetricCard({
+    title, value, delta, isRatio = false, isNegativeGood = false,
+    chartData, chartKey = 'val', baselineYear, suffix, latestYear
+}: MetricCardProps) {
+    const isPositiveDelta = typeof delta === 'number' && delta >= 0;
+    const valueSuffix = suffix ?? (isRatio ? '%' : '');
+    const deltaSuffix = isRatio ? ' p.p.' : '%';
+
+    let deltaColor = 'text-gray-500';
+    if (delta !== undefined) {
+        if (isNegativeGood) deltaColor = isPositiveDelta ? 'text-red-500' : 'text-green-500';
+        else deltaColor = isPositiveDelta ? 'text-green-500' : 'text-red-500';
+    }
+
+    return (
+        <div className="bg-white rounded-2xl p-5 flex flex-col justify-between shadow-sm border border-gray-100/80 hover:shadow-md transition-shadow duration-300">
+            <div>
+                <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-gray-400 uppercase tracking-wider text-[11px] font-semibold">{title}</h3>
+                    {latestYear && <span className="text-[10px] text-gray-300 font-medium">{latestYear}</span>}
+                </div>
+                <div className="text-2xl font-bold text-gray-900 tracking-tight">
+                    {value !== undefined && value !== null
+                        ? (typeof value === 'number' ? `${value.toLocaleString()}${valueSuffix}` : `${value}${valueSuffix}`)
+                        : 'N/A'}
+                </div>
+
+                {delta !== undefined && (
+                    <div className="flex items-center mt-2.5">
+                        <span className={`px-2 py-0.5 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-semibold flex items-center ${deltaColor}`}>
+                            {isPositiveDelta ? <TrendingUp size={12} className="mr-1" /> : <TrendingDown size={12} className="mr-1" />}
+                            {Math.abs(delta).toFixed(1)}{deltaSuffix}
+                            {baselineYear && <span className="text-gray-400 ml-1 font-medium">vs {baselineYear}</span>}
+                        </span>
+                    </div>
+                )}
+            </div>
+
+            {chartData && chartData.length > 0 && (
+                <div className="h-14 w-full mt-3">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={chartData} margin={{ bottom: 0 }}>
+                            <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                            <Tooltip
+                                cursor={{ fill: 'rgba(0,0,0,0.03)' }}
+                                contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '10px', color: '#fff', fontSize: '12px', padding: '8px 12px', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}
+                                labelStyle={{ fontWeight: 600, marginBottom: '2px', color: '#94a3b8' }}
+                                labelFormatter={(label) => `${label}`}
+                                formatter={(v: any) => [typeof v === 'number' ? `${v.toLocaleString()}${valueSuffix}` : v, title]}
+                            />
+                            <Bar dataKey={chartKey} radius={[3, 3, 0, 0]}>
+                                {chartData.map((_, i) => {
+                                    let c = '#cbd5e1';
+                                    if (i === chartData.length - 1) {
+                                        if (isNegativeGood) c = isPositiveDelta ? '#ef4444' : '#22c55e';
+                                        else c = isPositiveDelta ? '#22c55e' : '#ef4444';
+                                    }
+                                    return <Cell key={i} fill={c} />;
+                                })}
+                            </Bar>
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+            )}
+        </div>
+    );
+}
