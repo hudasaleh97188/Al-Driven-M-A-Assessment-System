@@ -142,7 +142,7 @@ def enrich_with_web_and_it(
 
     # ── Log the full request ────────────────────────────────────────────────
     logger.info(
-        "[LLM_REQUEST] Stage 2 | model={} | company='{}' | tools=[GoogleSearch] | temp=0.2",
+        "[LLM_REQUEST] Stage 2 | model={} | company='{}' | tools=[GoogleSearch] | temp=0",
         PRIMARY_MODEL, company_name,
     )
     logger.debug("[LLM_REQUEST] Stage 2 – Full prompt:\n{}", prompt)
@@ -155,7 +155,7 @@ def enrich_with_web_and_it(
                 response_mime_type="application/json",
                 response_schema=STAGE2_SCHEMA,
                 tools=[types.Tool(google_search=types.GoogleSearch())],
-                temperature=0.2,
+                temperature=0,
             ),
         )
     except Exception as exc:
@@ -193,7 +193,7 @@ def deep_dive_macro_and_management(
 
     # ── Log the full request ────────────────────────────────────────────────
     logger.info(
-        "[LLM_REQUEST] Stage 3 | model={} | company='{}' | countries={} | mgmt_count={} | tools=[GoogleSearch] | temp=0.2",
+        "[LLM_REQUEST] Stage 3 | model={} | company='{}' | countries={} | mgmt_count={} | tools=[GoogleSearch] | temp=0",
         PRIMARY_MODEL, company_name, countries, len(management),
     )
     logger.debug("[LLM_REQUEST] Stage 3 – Full prompt:\n{}", prompt)
@@ -206,7 +206,7 @@ def deep_dive_macro_and_management(
                 response_mime_type="application/json",
                 response_schema=STAGE3_SCHEMA,
                 tools=[types.Tool(google_search=types.GoogleSearch())],
-                temperature=0.2,
+                temperature=0,
             ),
         )
     except Exception as exc:

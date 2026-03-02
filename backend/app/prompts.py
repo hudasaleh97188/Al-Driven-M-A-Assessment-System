@@ -26,7 +26,7 @@ Extract values for ALL years present in the reports. Determine the primary repor
    - Management team (CEO, CFO, CTO, CRO/Head of Risk only)
    - Shareholder structure (major shareholders + ownership %)
    - Strategic Partners (IFIs: World Bank, IFC, EBRD; major tech/funding partners)
-   - Revenue by Subsidiaries or country if Subsidiaries are not available
+   - Revenue by subsidiaries or country if subsidiaries are not available (Must use exact JSON key 'revenue_by_subsidiaries_or_country')
    - Operational Scale for the LATEST year only:
      * Number of branches (physical only, exclude POS or agents)
      * Number of employees / FTEs
@@ -36,25 +36,30 @@ Extract values for ALL years present in the reports. Determine the primary repor
    Financial Health:
    - Revenue (Total Operating Revenue)
    - PAT (Net Income)
-   - EBITDA (= Net income + Tax on profits + Net interests + Operating allowances) before the calcuation if the value is not directly avaliable
+   - EBITDA (Earnings Before Interest, Taxes, Depreciation & Amortization)
+     If the report does not state EBITDA directly, calculate it as:
+     EBITDA = Pre-tax Income + Interest Expense (cost of funding/borrowings) + Depreciation & Amortization (Operating Allowances).
+     IMPORTANT: Do NOT use Net Interest Income here — use the Interest PAID on borrowings (found in the cash-flow statement or P&L under 'interest expense').
    - Total Assets 
    - Total Operating Expenses
    - Net Interests
    - Gross Loan Portfolio (gross outstanding + accrued interest)
    - Loans with arrears >30 days
-   - Gross Non-Performing Loans (90+ days past due / NPL)
+   - Gross Non-Performing Loans / NPL (loans >90 days past due)
    - Total Loan Loss Provisions
    - Total Equity
-   - Tier 1 Capital
-   - Risk-Weighted Assets
+   - Tier 1 Capital (regulatory capital as reported to the regulator — NOT simply Total Equity. Look for CET1, Tier 1 Core Capital, or Basel III disclosures. If no regulatory Tier 1 figure is disclosed, return null.)
+   - Risk-Weighted Assets (from Basel / regulatory disclosures — NOT the gross loan portfolio. RWAs include credit, market, and operational risk weightings. If no RWA figure is disclosed, return null.)
    - Disbursals (loans disbursed during the year)
    - Debts to clients (customer deposits)
    - Debts to financial institutions (borrowings)
-   - Credit Rating
+   - Credit Rating (Group-level issuer rating. If only a subsidiary or instrument rating exists, prefix with the entity name, e.g. "Baobab Nigeria: BBB+". If no rating exists, return null.)
+
+   CRITICAL: Tier 1 Capital is NOT the same as Total Equity. Risk-Weighted Assets are NOT the same as Gross Loan Portfolio. Only extract these from explicit regulatory / Basel disclosures. If the annual report does not contain these regulatory metrics, return null.
 
    NOTE: Calculate metrics that require arithmetic. If a value cannot be found or calculated, return null.
 
-=== SECTION 2: DEEP RISK & ANOMALY ANALYSIS ===
+=== SECTION 2: RISK DETECTION FRAMEWORK ===
 
 This is the most critical section. Synthesise data across multiple years, cross-reference narrative claims with figures, and identify hidden risks.
 
@@ -64,16 +69,46 @@ For each risk you MUST provide:
 - Concrete valuation impact (e.g., "-15% Est. EV Adjustment")
 - Actionable negotiation lever for the M&A deal team
 
-Analyse all 7 dimensions:
-1. FINANCIAL TRAJECTORY ANOMALIES – trend reversals, margin compression, one-offs masking core results
-2. ASSET QUALITY DETERIORATION – NPL trajectory, provision adequacy, PAR30 migration, concentration risk
-3. CAPITAL & SOLVENCY RISKS – CAR erosion, equity depletion, subsidiary-level breaches
-4. OPERATIONAL & SCALE RISKS – productivity per employee/branch, rapid expansion without revenue growth, IT failures
-5. REGULATORY & COMPLIANCE – ratio cross-reference vs. regulatory minimums, fines/sanctions, AML/KYC disclosures
-6. GOVERNANCE & RELATED-PARTY RISKS – related-party transactions, auditor qualifications, management turnover
-7. STRATEGIC & MARKET RISKS – geographic/currency concentration, market share loss, discontinued operations
+Analyse all 7 dimensions using the detailed sub-checks below:
 
-Produce at least 5–8 distinct, data-backed risk items. Generic or vague risks are unacceptable.
+1. FINANCIAL TRAJECTORY ANOMALIES
+   - Identify revenue or profit trend reversals (growth-to-decline or profit-to-loss) and assess their magnitude.
+   - Examine margin compression relative to revenue movement to detect structural cost pressures.
+   - Distinguish one-off or non-recurring items from core performance to uncover any masking of weak underlying results.
+
+2. ASSET QUALITY DETERIORATION
+   - Analyze GNPA/NPL trends versus regulatory thresholds to detect emerging credit deterioration.
+   - Assess provision coverage adequacy in relation to NPL movements to gauge risk absorption capacity.
+   - Track PAR > 30 migration trends to identify potential hidden restructurings or asset quality slippages.
+   - Evaluate loan concentration risks across geography, sector, or borrower exposures.
+
+3. CAPITAL & SOLVENCY RISKS
+   - Review CAR trajectory versus regulatory minimums and available buffers.
+   - Assess equity erosion arising from FX losses, impairments, or recurring operational losses.
+   - Identify subsidiary-level capital breaches that may be masked by consolidated reporting.
+   - Note: Capital strength will be assessed in conjunction with CAR levels and loan portfolio quality rather than equity in isolation, reflecting an integrated view of solvency resilience.
+
+4. OPERATIONAL & SCALE RISKS
+   - Monitor productivity and efficiency metrics (e.g., revenue per employee, loans per branch).
+   - Flag rapid network or portfolio expansion not supported by proportionate revenue growth.
+   - Identify technology or IT disruptions, including failed migrations, cyber incidents, or system write-offs.
+
+5. REGULATORY & COMPLIANCE RISKS
+   - Compare key prudential ratios against local regulatory requirements for early breach detection.
+   - Track fines, sanctions, or enforcement actions signaling compliance weaknesses.
+   - Review AML/KYC framework disclosures to assess governance robustness.
+
+6. GOVERNANCE & RELATED-PARTY RISKS
+   - Highlight material related-party transactions and potential conflicts of interest.
+   - Note auditor qualifications, emphasis-of-matter paragraphs, or restatements.
+   - Track management or board turnover frequency as a proxy for governance instability.
+
+7. STRATEGIC & MARKET RISKS
+   - Examine geographic and currency concentration exposures impacting risk diversification.
+   - Evaluate competitive positioning, market share trends, and pricing pressures.
+   - Identify impact from discontinued operations, divestments, or major strategic shifts.
+
+Produce at least 5–10 distinct, data-backed risk items. Generic or vague risks are unacceptable.
 
 Output: STRICTLY valid JSON matching the requested schema.
 """

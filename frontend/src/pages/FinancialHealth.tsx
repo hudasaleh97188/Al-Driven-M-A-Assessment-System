@@ -88,7 +88,7 @@ export default function FinancialHealth({ data }: { data: AnalysisData }) {
                             <tbody className="divide-y divide-gray-50">
                                 <LoanRow label="Gross Loan Portfolio" data={fd} field="gross_loan_portfolio" />
                                 <LoanRow label="Disbursals" data={fd} field="disbursals" />
-                                <LoanRow label="GNPA / NPL (%)" data={fd} field="gnpa_percent" isRatio isNegativeGood />
+                                <LoanRow label="GNPA / NPL >90 Days (%)" data={fd} field="gnpa_percent" isRatio isNegativeGood />
                                 <LoanRow label="PAR 30 (%)" data={fd} field="par_30_percent" isRatio isNegativeGood />
                                 <LoanRow label="Provision Coverage (%)" data={fd} field="provision_coverage_percent" isRatio />
                                 <LoanRow label="Total Assets" data={fd} field="total_assets" />

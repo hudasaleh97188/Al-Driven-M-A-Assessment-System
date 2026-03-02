@@ -101,8 +101,10 @@ _FINANCIAL_DATA_ITEM = {
                 "ebitda": {
                     "type": "NUMBER",
                     "description": (
-                        "Earnings before interest, tax, depreciation and amortisation. "
-                        "Formula: Net income + Tax on profits + Net interests + Operating allowances"
+                        "Earnings Before Interest, Taxes, Depreciation & Amortization. "
+                        "If not directly stated, calculate as: Pre-tax Income + Interest Expense "
+                        "(cost of funding/borrowings) + Depreciation & Amortization. "
+                        "Do NOT use Net Interest Income — use Interest PAID on borrowings."
                     ),
                 },
                 "pat":   {"type": "NUMBER", "description": "Net Income"},
@@ -116,15 +118,27 @@ _FINANCIAL_DATA_ITEM = {
                 "loans_with_arrears_over_30_days": {"type": "NUMBER"},
                 "gross_non_performing_loans": {
                     "type": "NUMBER",
-                    "description": "Gross non-performing loans (usually 90+ days past due) or NPL",
+                    "description": "Gross Non-Performing Loans / NPL (loans >90 days past due)",
                 },
                 "total_loan_loss_provisions": {"type": "NUMBER"},
                 "total_equity": {
                     "type": "NUMBER",
                     "description": "Company's accounting net worth (assets minus liabilities)",
                 },
-                "tier_1_capital": {"type": "NUMBER"},
-                "risk_weighted_assets": {"type": "NUMBER"},
+                "tier_1_capital": {
+                    "type": "NUMBER",
+                    "description": (
+                        "Regulatory Tier 1 capital (CET1 / Core Capital from Basel disclosures). "
+                        "NOT simply Total Equity. Return null if not disclosed."
+                    ),
+                },
+                "risk_weighted_assets": {
+                    "type": "NUMBER",
+                    "description": (
+                        "Risk-Weighted Assets from Basel / regulatory disclosures. "
+                        "NOT the gross loan portfolio. Return null if not disclosed."
+                    ),
+                },
                 "disbursals": {
                     "type": "NUMBER",
                     "description": "Loans disbursed during the year",
@@ -137,7 +151,14 @@ _FINANCIAL_DATA_ITEM = {
                     "type": "NUMBER",
                     "description": "Borrowings from financial institutions",
                 },
-                "credit_rating": {"type": "STRING"},
+                "credit_rating": {
+                    "type": "STRING",
+                    "description": (
+                        "Group-level issuer credit rating. If only a subsidiary or instrument "
+                        "rating exists, prefix with entity name (e.g. 'Baobab Nigeria: BBB+'). "
+                        "Return null if none."
+                    ),
+                },
             },
         },
     },
