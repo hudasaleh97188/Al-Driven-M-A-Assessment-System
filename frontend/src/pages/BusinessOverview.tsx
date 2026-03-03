@@ -1,18 +1,36 @@
-import { Globe, Users, Building, Contact, Briefcase, MapPin, Shield } from 'lucide-react';
+import { Globe, Users, Building, Contact, Briefcase, MapPin, Shield, Target } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 import type { AnalysisData } from '../types';
+import RatingComparison from './RatingComparison';
 
 const COLORS = ['#3b82f6', '#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#ef4444', '#06b6d4'];
+
+const CustomXAxisTick = ({ x, y, payload }: any) => {
+    if (!payload || !payload.value) return null;
+    const words = payload.value.split(' ');
+    const firstLine = words[0];
+    const secondLine = words.length > 1 ? words.slice(1).join(' ') : '';
+
+    return (
+        <g transform={`translate(${x},${y})`}>
+            <text x={0} y={0} dy={12} textAnchor="middle" fill="#6b7280" fontSize={10}>
+                <tspan textAnchor="middle" x="0" dy="0">{firstLine}</tspan>
+                {secondLine && <tspan textAnchor="middle" x="0" dy="12">{secondLine}</tspan>}
+            </text>
+        </g>
+    );
+};
 
 export default function BusinessOverview({ data }: { data: AnalysisData }) {
     const ov = data.company_overview;
     const mgmt = data.management_quality ?? [];
-    const geo = data.macroeconomic_geo_view ?? [];
     const partners = ov?.strategic_partners ?? [];
     const subsidiaries = ov?.revenue_by_subsidiaries_or_country ?? [];
     const scale = ov?.operational_scale;
     const it = data.quality_of_it;
     const competitive = data.competitive_position;
+
+    const competitors = competitive?.key_competitors ?? [];
 
     // Match management_quality deep-dive data to team members
     const getManagementDetail = (name: string) => mgmt.find(m => m.name === name);
@@ -61,18 +79,18 @@ export default function BusinessOverview({ data }: { data: AnalysisData }) {
                     {/* Revenue by Subsidiaries or Country */}
                     {subsidiaries.length > 0 && (
                         <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-                            <h4 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Revenue by Subsidiaries / Country ({data.currency})</h4>
-                            <div className="h-44">
+                            <h4 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Total Operating Revenue by Subsidiaries / Country ({data.currency})</h4>
+                            <div className="h-64 mt-4">
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={subsidiaries} layout="vertical" margin={{ left: 10, right: 20 }}>
-                                        <XAxis type="number" tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-                                        <YAxis type="category" dataKey="subsidiary_or_country" width={120} tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false} />
+                                    <BarChart data={subsidiaries} margin={{ top: 10, right: 20, bottom: 30, left: 10 }}>
+                                        <XAxis dataKey="subsidiary_or_country" tick={<CustomXAxisTick />} interval={0} axisLine={false} tickLine={false} height={40} />
+                                        <YAxis type="number" tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} width={70} />
                                         <Tooltip
                                             contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#0f172a', fontSize: '12px', padding: '8px 12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)' }}
                                             itemStyle={{ color: '#0f172a', fontWeight: 500, padding: 0 }}
-                                            formatter={(v: any) => [`${v} ${data.currency}`, 'Revenue']}
+                                            formatter={(v: any) => [`${v} ${data.currency}`, 'Total Operating Revenue']}
                                         />
-                                        <Bar dataKey="revenue" radius={[0, 6, 6, 0]}>
+                                        <Bar dataKey="total_operating_revenue" radius={[6, 6, 0, 0]}>
                                             {subsidiaries.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                                         </Bar>
                                     </BarChart>
@@ -168,6 +186,20 @@ export default function BusinessOverview({ data }: { data: AnalysisData }) {
                 </section>
             )}
 
+            {/* ──── Key Competitors ──── */}
+            {competitors.length > 0 && (
+                <section>
+                    <SectionHeader icon={<Target className="w-4 h-4" />} title="Key Competitors" color="rose" />
+                    <div className="flex flex-wrap gap-3">
+                        {competitors.map(c => (
+                            <span key={c} className="px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-700 shadow-sm hover:shadow-md transition-shadow">
+                                {c}
+                            </span>
+                        ))}
+                    </div>
+                </section>
+            )}
+
             {/* ──── IT Quality ──── */}
             {it && (
                 <section>
@@ -209,40 +241,11 @@ export default function BusinessOverview({ data }: { data: AnalysisData }) {
             )}
 
             {/* ──── Microfinance Geo-View ──── */}
-            {geo.length > 0 && (
+            {data.macroeconomic_geo_view && data.macroeconomic_geo_view.length > 0 && (
                 <section>
-                    <SectionHeader icon={<MapPin className="w-4 h-4" />} title="Microfinance Geo-View" color="rose" />
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left text-sm">
-                                <thead>
-                                    <tr className="border-b border-gray-100 bg-gray-50/50">
-                                        <th className="p-4 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Country</th>
-                                        <th className="p-4 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">GDP/Cap (PPP)</th>
-                                        <th className="p-4 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Inflation</th>
-                                        <th className="p-4 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Risk Score</th>
-                                        <th className="p-4 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">CPI</th>
-                                        <th className="p-4 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Financial Inclusion</th>
-                                        <th className="p-4 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Credit/GDP</th>
-                                        <th className="p-4 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Mobile Money</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-50">
-                                    {geo.map(g => (
-                                        <tr key={g.country} className="hover:bg-blue-50/30 transition-colors">
-                                            <td className="p-4 font-semibold text-gray-900">{g.country}</td>
-                                            <td className="p-4 text-gray-600">{g.gdp_per_capita_ppp || '—'}</td>
-                                            <td className="p-4 text-gray-600">{g.inflation_projection || '—'}</td>
-                                            <td className="p-4 text-gray-600">{g.country_risk_score || '—'}</td>
-                                            <td className="p-4 text-gray-600">{g.corruption_perceptions_index || '—'}</td>
-                                            <td className="p-4 text-gray-600">{g.financial_inclusion_rate || '—'}</td>
-                                            <td className="p-4 text-gray-600">{g.credit_to_gdp_ratio || '—'}</td>
-                                            <td className="p-4 text-gray-600">{g.mobile_money_adoption || '—'}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                    <SectionHeader icon={<Globe className="w-4 h-4" />} title="Microfinance Geo-View" color="teal" />
+                    <div className="mt-4">
+                        <RatingComparison data={data} />
                     </div>
                 </section>
             )}
@@ -260,6 +263,7 @@ function SectionHeader({ icon, title, color }: { icon: React.ReactNode; title: s
         cyan: 'bg-cyan-100 text-cyan-600',
         orange: 'bg-orange-100 text-orange-600',
         rose: 'bg-rose-100 text-rose-600',
+        teal: 'bg-teal-100 text-teal-600',
     };
     return (
         <div className="flex items-center gap-2.5 mb-5">

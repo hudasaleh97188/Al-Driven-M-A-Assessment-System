@@ -26,7 +26,7 @@ Extract values for ALL years present in the reports. Determine the primary repor
    - Management team (CEO, CFO, CTO, CRO/Head of Risk only)
    - Shareholder structure (major shareholders + ownership %)
    - Strategic Partners (IFIs: World Bank, IFC, EBRD; major tech/funding partners)
-   - Revenue by subsidiaries or country if subsidiaries are not available (Must use exact JSON key 'revenue_by_subsidiaries_or_country')
+   - Revenue by subsidiaries or country if subsidiaries are not available (Must output the numerical value using the exact key "total_operating_revenue")
    - Operational Scale for the LATEST year only:
      * Number of branches (physical only, exclude POS or agents)
      * Number of employees / FTEs
@@ -72,8 +72,8 @@ For each risk you MUST provide:
 Analyse all 7 dimensions using the detailed sub-checks below:
 
 1. FINANCIAL TRAJECTORY ANOMALIES
-   - Identify revenue or profit trend reversals (growth-to-decline or profit-to-loss) and assess their magnitude.
-   - Examine margin compression relative to revenue movement to detect structural cost pressures.
+   - Identify total operating revenue or profit trend reversals (growth-to-decline or profit-to-loss) and assess their magnitude.
+   - Examine margin compression relative to total operating revenue movement to detect structural cost pressures.
    - Distinguish one-off or non-recurring items from core performance to uncover any masking of weak underlying results.
 
 2. ASSET QUALITY DETERIORATION
@@ -89,8 +89,8 @@ Analyse all 7 dimensions using the detailed sub-checks below:
    - Note: Capital strength will be assessed in conjunction with CAR levels and loan portfolio quality rather than equity in isolation, reflecting an integrated view of solvency resilience.
 
 4. OPERATIONAL & SCALE RISKS
-   - Monitor productivity and efficiency metrics (e.g., revenue per employee, loans per branch).
-   - Flag rapid network or portfolio expansion not supported by proportionate revenue growth.
+   - Monitor productivity and efficiency metrics (e.g., total operating revenue per employee, loans per branch).
+   - Flag rapid network or portfolio expansion not supported by proportionate total operating revenue growth.
    - Identify technology or IT disruptions, including failed migrations, cyber incidents, or system write-offs.
 
 5. REGULATORY & COMPLIANCE RISKS
@@ -147,24 +147,28 @@ Output strictly as JSON matching the requested schema.
 # Stage 3 – Macro economics + competitive + management deep dive
 # ---------------------------------------------------------------------------
 
-def build_stage3_prompt(company_name: str, countries: list, management: list) -> str:
+def build_stage3_prompt(company_name: str, countries: list, management: list, products: str) -> str:
     return f"""
 Role: Macroeconomist & Private Equity Investigator.
 Task: Perform a deep dive using Google Search on "{company_name}",
 operating in {countries}, with leadership: {json.dumps(management)}.
 
-1. MICROFINANCE GEO-VIEW (one entry per country of operation):
-   Search recent macro indicators from World Bank / IMF / reputable sources:
-   - GDP per capita (PPP, USD)
-   - Inflation projection (latest available year)
-   - Country risk score (e.g., from Moody's, S&P, or Euromoney)
-   - Corruption Perceptions Index (CPI, Transparency International)
-   - Financial inclusion rate (% of adults with bank/mobile money account)
-   - Credit-to-GDP ratio
-   - Mobile money adoption rate (% of adult population)
+   1. MACROECONOMIC GEO-VIEW (one entry per country of operation):
+   Search specific reputable sources to find the LATEST AVAILABLE VALUE for each indicator:
+   - Population (Source: World Bank Open Data) -> (Output key: "population")
+   - GDP per capita PPP (Source: IMF World Economic Outlook) -> (Output key: "gdp_per_capita_ppp")
+   - GDP growth forecast (Source: IMF World Economic Outlook) -> (Output key: "gdp_growth_forecast")
+   - Inflation (Source: IMF World Economic Outlook) -> (Output key: "inflation")
+   - Central bank interest rate (Source: Central Bank or BIS) -> (Output key: "central_bank_interest_rate")
+   - Unemployment rate (Source: ILOSTAT) -> (Output key: "unemployment_rate")
+   - Country risk rating (Source: Atradius Country Risk Map) -> (Output key: "country_risk_rating")
+   - Corruption Perceptions Index rank (Source: Transparency International) -> (Output key: "corruption_perceptions_index_rank")
 
 2. COMPETITIVE POSITION:
-   Search for "{company_name}":
+   Search for "{company_name}".
+   IMPORTANT (ANTI-HALLUCINATION): To avoid confusing "{company_name}" with other companies that have similar names, you MUST ensure that all competitors and market data you identify relate to companies offering the EXACT SAME products/services ("{products}") and operating in {countries}.
+   Extract:
+   - Key Competitors (direct competitors). (Return strictly as an array of strings in "key_competitors")
    - Market share data vs. key competitors
    - References in central bank sector reports
    - Independent industry studies

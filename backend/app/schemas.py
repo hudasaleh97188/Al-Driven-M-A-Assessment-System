@@ -61,9 +61,9 @@ COMPANY_OVERVIEW_SCHEMA = {
                 "type": "OBJECT",
                 "properties": {
                     "subsidiary_or_country": {"type": "STRING"},
-                    "revenue":               {"type": "NUMBER"},
+                    "total_operating_revenue": {"type": "NUMBER"},
                 },
-                "required": ["subsidiary_or_country", "revenue"],
+                "required": ["subsidiary_or_country", "total_operating_revenue"],
             },
         },
         "operational_scale": {
@@ -85,6 +85,15 @@ COMPANY_OVERVIEW_SCHEMA = {
             },
         },
     },
+    "required": [
+        "description_of_products_and_services",
+        "countries_of_operation",
+        "management_team",
+        "shareholder_structure",
+        "strategic_partners",
+        "revenue_by_subsidiaries_or_country",
+        "operational_scale"
+    ],
 }
 
 _FINANCIAL_DATA_ITEM = {
@@ -94,7 +103,7 @@ _FINANCIAL_DATA_ITEM = {
         "financial_health": {
             "type": "OBJECT",
             "properties": {
-                "revenue": {
+                "total_operating_revenue": {
                     "type": "NUMBER",
                     "description": "Total Operating Revenue",
                 },
@@ -257,26 +266,49 @@ STAGE3_SCHEMA = {
             "items": {
                 "type": "OBJECT",
                 "properties": {
-                    "country":                   {"type": "STRING"},
-                    "gdp_per_capita_ppp":         {"type": "STRING"},
-                    "inflation_projection":       {"type": "STRING"},
-                    "country_risk_score":         {"type": "STRING"},
-                    "corruption_perceptions_index": {"type": "STRING"},
-                    "financial_inclusion_rate":   {"type": "STRING"},
-                    "credit_to_gdp_ratio":        {"type": "STRING"},
-                    "mobile_money_adoption":      {"type": "STRING"},
+                    "country":                           {"type": "STRING"},
+                    "population":                        {"type": "STRING"},
+                    "gdp_per_capita_ppp":                {"type": "STRING"},
+                    "gdp_growth_forecast":               {"type": "STRING"},
+                    "inflation":                         {"type": "STRING"},
+                    "central_bank_interest_rate":        {"type": "STRING"},
+                    "unemployment_rate":                 {"type": "STRING"},
+                    "country_risk_rating":               {"type": "STRING"},
+                    "corruption_perceptions_index_rank": {"type": "STRING"},
                 },
-                "required": ["country"],
+                "required": [
+                    "country",
+                    "population",
+                    "gdp_per_capita_ppp",
+                    "gdp_growth_forecast",
+                    "inflation",
+                    "central_bank_interest_rate",
+                    "unemployment_rate",
+                    "country_risk_rating",
+                    "corruption_perceptions_index_rank"
+                ],
             },
         },
         "competitive_position": {
             "type": "OBJECT",
             "properties": {
+                "key_competitors": {
+                    "type": "ARRAY",
+                    "description": "Direct competitors offering exact same products/services and operating in the same or similar regions.",
+                    "items": {"type": "STRING"},
+                },
                 "market_share_data":                    {"type": "STRING"},
                 "central_bank_sector_reports_summary":  {"type": "STRING"},
                 "industry_studies_summary":             {"type": "STRING"},
                 "customer_growth_or_attrition_news":    {"type": "STRING"},
             },
+            "required": [
+                "key_competitors",
+                "market_share_data",
+                "central_bank_sector_reports_summary",
+                "industry_studies_summary",
+                "customer_growth_or_attrition_news"
+            ],
         },
         "management_quality": {
             "type": "ARRAY",

@@ -35,9 +35,9 @@ def compute_ratios(financial_health: dict) -> dict:
     """
     fh = financial_health  # alias for brevity
 
-    pat            = fh.get("pat")
-    revenue        = fh.get("revenue")
-    total_equity   = fh.get("total_equity")
+    pat                     = fh.get("pat")
+    total_operating_revenue = fh.get("total_operating_revenue")
+    total_equity            = fh.get("total_equity")
     total_assets   = fh.get("total_assets")
     op_expenses    = fh.get("total_operating_expenses")
     net_interests  = fh.get("net_interests")
@@ -54,10 +54,10 @@ def compute_ratios(financial_health: dict) -> dict:
         if value is not None:
             fh[key] = round(value * (100 if pct else 1), dp)
 
-    _set("profit_margin_percent",         safe_divide(pat, revenue))
+    _set("profit_margin_percent",         safe_divide(pat, total_operating_revenue))
     _set("roe_percent",                   safe_divide(pat, total_equity))
     _set("roa_percent",                   safe_divide(pat, total_assets))
-    _set("cost_to_income_ratio_percent",  safe_divide(op_expenses, revenue))
+    _set("cost_to_income_ratio_percent",  safe_divide(op_expenses, total_operating_revenue))
     _set("nim_percent",                   safe_divide(net_interests, gross_loans))
     _set("par_30_percent",                safe_divide(arrears_30, gross_loans))
     _set("gnpa_percent",                  safe_divide(gnpa_val, gross_loans))

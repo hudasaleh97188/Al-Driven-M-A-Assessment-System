@@ -142,20 +142,21 @@ def enrich_with_web_and_it(
 
     # ── Log the full request ────────────────────────────────────────────────
     logger.info(
-        "[LLM_REQUEST] Stage 2 | model={} | company='{}' | tools=[GoogleSearch] | temp=0",
-        PRIMARY_MODEL, company_name,
+        "[LLM_REQUEST] Stage 2 | model='gemini-3-flash-preview' | company='{}' | tools=[GoogleSearch] | temp=0 | thinking='MEDIUM'",
+        company_name,
     )
     logger.debug("[LLM_REQUEST] Stage 2 – Full prompt:\n{}", prompt)
 
     try:
         response = client.models.generate_content(
-            model=PRIMARY_MODEL,
+            model="gemini-3-flash-preview",
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=STAGE2_SCHEMA,
                 tools=[types.Tool(google_search=types.GoogleSearch())],
                 temperature=0,
+                thinking_config=types.ThinkingConfig(thinking_level="MEDIUM"),
             ),
         )
     except Exception as exc:
@@ -189,18 +190,19 @@ def deep_dive_macro_and_management(
     overview   = base_data.get("company_overview", {})
     countries  = overview.get("countries_of_operation", [])
     management = overview.get("management_team", [])
-    prompt     = build_stage3_prompt(company_name, countries, management)
+    products   = overview.get("description_of_products_and_services", "")
+    prompt     = build_stage3_prompt(company_name, countries, management, products)
 
     # ── Log the full request ────────────────────────────────────────────────
     logger.info(
-        "[LLM_REQUEST] Stage 3 | model={} | company='{}' | countries={} | mgmt_count={} | tools=[GoogleSearch] | temp=0",
-        PRIMARY_MODEL, company_name, countries, len(management),
+        "[LLM_REQUEST] Stage 3 | model='gemini-2.5-pro' | company='{}' | countries={} | mgmt_count={} | tools=[GoogleSearch] | temp=0",
+        company_name, countries, len(management),
     )
     logger.debug("[LLM_REQUEST] Stage 3 – Full prompt:\n{}", prompt)
 
     try:
         response = client.models.generate_content(
-            model=PRIMARY_MODEL,
+            model="gemini-2.5-pro",
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
@@ -256,13 +258,37 @@ def run_pipeline(
     try:
         stage2 = enrich_with_web_and_it(data, company_name, project_id)
         if stage2:
-            # Patch missing data; do NOT overwrite with empty values
-            data["company_overview"] = (
-                stage2.get("company_overview") or data.get("company_overview")
-            )
-            data["financial_data"] = (
-                stage2.get("financial_data") or data.get("financial_data")
-            )
+            # Deep Merge company_overview:
+            s2_overview = stage2.get("company_overview", {})
+            if "company_overview" not in data:
+                data["company_overview"] = {}
+            for k, v in s2_overview.items():
+                if v:  # Only overwrite if Stage 2 found something non-empty
+                    data["company_overview"][k] = v
+
+            # Merge financial_data by year:
+            s2_fin = stage2.get("financial_data", [])
+            s1_fin = data.get("financial_data", [])
+            
+            s1_fin_dict = {item.get("year"): item for item in s1_fin if item.get("year")}
+            
+            for s2_item in s2_fin:
+                year = s2_item.get("year")
+                if not year: continue
+                
+                if year in s1_fin_dict:
+                    s1_health = s1_fin_dict[year].get("financial_health", {})
+                    s2_health = s2_item.get("financial_health", {})
+                    
+                    for k, v in s2_health.items():
+                        if v is not None:  # Overwrite missing numericals/strings
+                            s1_health[k] = v
+                else:
+                    # If this is a new year added by Stage 2
+                    s1_fin_dict[year] = s2_item
+                    
+            data["financial_data"] = list(s1_fin_dict.values())
+
             if stage2.get("quality_of_it"):
                 data["quality_of_it"] = stage2["quality_of_it"]
             logger.info("[PIPELINE] Stage 2 complete – merged successfully")
@@ -275,14 +301,34 @@ def run_pipeline(
     try:
         stage3 = deep_dive_macro_and_management(data, company_name, project_id)
         if stage3:
-            data["macroeconomic_geo_view"] = stage3.get("macroeconomic_geo_view", [])
-            data["competitive_position"]   = stage3.get("competitive_position", {})
-            data["management_quality"]     = stage3.get("management_quality", [])
+            # Only update if list is non-empty
+            s3_macro = stage3.get("macroeconomic_geo_view", [])
+            if s3_macro:
+                data["macroeconomic_geo_view"] = s3_macro
+                
+            s3_mgmt = stage3.get("management_quality", [])
+            if s3_mgmt:
+                data["management_quality"] = s3_mgmt
+                
+            # Deep merge competitive position
+            s3_comp = stage3.get("competitive_position", {})
+            if "competitive_position" not in data:
+                data["competitive_position"] = {}
+                
+            for k, v in s3_comp.items():
+                if v: # Only overwrite if value exists and is truthy
+                    data["competitive_position"][k] = v
+                    
             logger.info("[PIPELINE] Stage 3 complete – merged successfully")
         else:
             logger.warning("[PIPELINE] Stage 3 returned empty result")
     except Exception:
         logger.error("[PIPELINE] Stage 3 failed – continuing with existing data:\n{}", traceback.format_exc())
+
+    # ── Final Compute & Ratios ──────────────────────────────────────────────
+    if "financial_data" in data and data["financial_data"]:
+        data["financial_data"] = enrich_financial_data(data["financial_data"])
+        logger.info("[PIPELINE] Re-computed ratios after merges")
 
     logger.info("[PIPELINE] Pipeline complete for '{}' – {} top-level keys in result",
                 company_name, len(data))

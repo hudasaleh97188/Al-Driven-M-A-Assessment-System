@@ -2,7 +2,7 @@
 
 export interface SubsidiaryRevenue {
     subsidiary_or_country: string;
-    revenue: number;
+    total_operating_revenue: number;
 }
 
 export interface ManagementMember {
@@ -32,7 +32,7 @@ export interface CompanyOverview {
 }
 
 export interface FinancialHealth {
-    revenue?: number;
+    total_operating_revenue?: number;
     ebitda?: number;
     pat?: number;
     total_assets?: number;
@@ -86,16 +86,18 @@ export interface QualityOfIT {
 
 export interface GeoViewCountry {
     country: string;
+    population?: string;
     gdp_per_capita_ppp?: string;
-    inflation_projection?: string;
-    country_risk_score?: string;
-    corruption_perceptions_index?: string;
-    financial_inclusion_rate?: string;
-    credit_to_gdp_ratio?: string;
-    mobile_money_adoption?: string;
+    gdp_growth_forecast?: string;
+    inflation?: string;
+    central_bank_interest_rate?: string;
+    unemployment_rate?: string;
+    country_risk_rating?: string;
+    corruption_perceptions_index_rank?: string;
 }
 
 export interface CompetitivePosition {
+    key_competitors?: string[];
     market_share_data?: string;
     central_bank_sector_reports_summary?: string;
     industry_studies_summary?: string;

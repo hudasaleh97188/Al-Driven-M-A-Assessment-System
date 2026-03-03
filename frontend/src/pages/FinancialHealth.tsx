@@ -30,7 +30,7 @@ export default function FinancialHealth({ data }: { data: AnalysisData }) {
             <section>
                 <SectionBar color="bg-blue-500" title={`Absolute Health${latYear ? ` (${latYear})` : ''}`} />
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                    <MetricCard title="Revenue" value={lf?.revenue} delta={pctDelta(lf?.revenue, ff?.revenue)} chartData={chartOf('revenue')} baselineYear={firstYear} latestYear={latYear} />
+                    <MetricCard title="Total Operating Revenue" value={lf?.total_operating_revenue} delta={pctDelta(lf?.total_operating_revenue, ff?.total_operating_revenue)} chartData={chartOf('total_operating_revenue')} baselineYear={firstYear} latestYear={latYear} />
                     <MetricCard title="EBITDA" value={lf?.ebitda} delta={pctDelta(lf?.ebitda, ff?.ebitda)} chartData={chartOf('ebitda')} baselineYear={firstYear} latestYear={latYear} />
                     <MetricCard title="PAT (Net Income)" value={lf?.pat} delta={pctDelta(lf?.pat, ff?.pat)} chartData={chartOf('pat')} baselineYear={firstYear} latestYear={latYear} />
                     <MetricCard title="Total Equity" value={lf?.total_equity} delta={pctDelta(lf?.total_equity, ff?.total_equity)} chartData={chartOf('total_equity')} baselineYear={firstYear} latestYear={latYear} />
