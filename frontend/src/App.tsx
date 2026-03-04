@@ -155,7 +155,7 @@ export default function App() {
                                 )}
                                 {data.company_overview?.operational_scale?.number_of_employees && (
                                     <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">
-                                        {data.company_overview.operational_scale.number_of_employees.toLocaleString()} employees
+                                        {(Math.floor(data.company_overview.operational_scale.number_of_employees / 10) * 10).toLocaleString()}+ employees
                                     </span>
                                 )}
                                 {data.company_overview?.countries_of_operation && (

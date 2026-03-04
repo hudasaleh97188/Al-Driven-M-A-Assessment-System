@@ -34,9 +34,13 @@ export default function FinancialHealth({ data }: { data: AnalysisData }) {
                     <MetricCard title="EBITDA" value={lf?.ebitda} delta={pctDelta(lf?.ebitda, ff?.ebitda)} chartData={chartOf('ebitda')} baselineYear={firstYear} latestYear={latYear} />
                     <MetricCard
                         title={
-                            <span className="flex items-center gap-1.5" title="overall performance including any discontinued operations">
+                            <span className="flex items-center gap-1.5 relative group cursor-help">
                                 PAT (Net Income)
-                                <Info size={12} className="text-gray-400 hover:text-gray-600 cursor-help" />
+                                <Info size={12} className="text-gray-400 group-hover:text-gray-600 transition-colors" />
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[200px] bg-white border border-slate-200 text-slate-900 text-[11px] font-normal leading-tight rounded-lg p-2.5 shadow-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-50 text-center">
+                                    overall performance including any discontinued operations
+                                    <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-white border-b border-r border-slate-200 rotate-45 -mt-[4px]" />
+                                </div>
                             </span>
                         }
                         value={lf?.pat} delta={pctDelta(lf?.pat, ff?.pat)} chartData={chartOf('pat')} baselineYear={firstYear} latestYear={latYear} />
@@ -52,8 +56,9 @@ export default function FinancialHealth({ data }: { data: AnalysisData }) {
                             {fd.map((d, i) => (
                                 <div key={i} className="group relative flex-1">
                                     <div className="h-2 rounded-full bg-gray-200 w-full hover:bg-gray-400 cursor-pointer transition-colors" />
-                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 rounded text-[10px] text-white whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">
+                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-900 shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">
                                         {d.year}: {d.financial_health?.credit_rating || 'N/A'}
+                                        <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-white border-b border-r border-slate-200 rotate-45 -mt-[4px]" />
                                     </div>
                                 </div>
                             ))}

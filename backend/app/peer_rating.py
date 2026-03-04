@@ -45,6 +45,7 @@ def _extract_target_data(analysis: dict) -> dict:
     is_public = len(shareholders) > 5
 
     return {
+        "company_id": analysis.get("company_id"),
         "company_name": analysis.get("company_name", "Unknown"),
         "pat": latest.get("pat"),
         "total_equity": latest.get("total_equity"),
@@ -77,6 +78,7 @@ def _extract_target_data(analysis: dict) -> dict:
             "industry_studies_summary": competitive_pos.get("industry_studies_summary", ""),
             "central_bank_sector_reports_summary": competitive_pos.get("central_bank_sector_reports_summary", ""),
         },
+        "macroeconomic_geo_view": analysis.get("macroeconomic_geo_view", []),
         "currency": analysis.get("currency", "USDm"),
     }
 

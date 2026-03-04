@@ -31,6 +31,7 @@ const verdictColor = (v: string) =>
 const CRITERIA_ORDER = [
     'Contribution to Profitability',
     'Size of Transaction',
+    'Geographic / Strategic Fit',
     'Product / Market Strategy Fit',
     'Ease of Execution',
     'Quality & Depth of Management',
@@ -42,6 +43,7 @@ const CRITERIA_ORDER = [
 const CRITERIA_SHORT = [
     'Profitability',
     'Scale',
+    'Geo Fit',
     'Product Fit',
     'Execution',
     'Management',
@@ -67,7 +69,10 @@ interface Props {
 
 export default function RatingComparison({ data }: Props) {
     const [peerData, setPeerData] = useState<PeerRatingResult | null>(null);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(false);      // explicit re-run spinner
+    const [initializing, setInitializing] = useState(true); // silent first-load
+    const [visible, setVisible] = useState(false);          // drives fade-in
+    const [animated, setAnimated] = useState(false);        // drives bar/chart animations
     const [error, setError] = useState('');
     const [loaded, setLoaded] = useState(false);
     const [weights, setWeights] = useState<{ [key: string]: number }>({ ...DEFAULT_WEIGHTS });
@@ -101,7 +106,7 @@ export default function RatingComparison({ data }: Props) {
     };
 
     const handleLoad = async () => {
-        setLoading(true);
+        // Silent background fetch — does NOT trigger the full-page spinner
         setError('');
         try {
             const result = await fetchPeerRating(data.company_name);
@@ -117,14 +122,22 @@ export default function RatingComparison({ data }: Props) {
         } catch {
             setLoaded(true);
         } finally {
-            setLoading(false);
+            setInitializing(false);
+            // Small delay so the fade-in animation is visible
+            requestAnimationFrame(() => {
+                setVisible(true);
+                setTimeout(() => setAnimated(true), 50);
+            });
         }
     };
 
     // Try loading cached data on first render
-    if (!loaded && !loading) {
-        handleLoad();
-    }
+    useEffect(() => {
+        if (!loaded) {
+            handleLoad();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const addPeer = async (name: string) => {
         if (!selectedPeers.includes(name)) {
@@ -211,8 +224,8 @@ export default function RatingComparison({ data }: Props) {
         return totalWeight > 0 ? totalWeighted / totalWeight : 0;
     };
 
-    /* ── Empty state ── */
-    if (!peerData && !loading) {
+    /* ── Empty state (no cached rating found after silent load) ── */
+    if (!initializing && !peerData && !loading) {
         return (
             <div className="animate-in fade-in duration-500">
                 {error && (
@@ -222,7 +235,7 @@ export default function RatingComparison({ data }: Props) {
                     <ShieldAlert className="w-12 h-12 text-gray-300 mb-4" />
                     <h2 className="text-xl font-bold text-gray-900 mb-2">M&A Rating Not Available</h2>
                     <p className="text-gray-500 text-sm max-w-md mx-auto mb-6">
-                        Run the rating to score {data.company_name} on 8 M&A attractiveness criteria.
+                        Run the rating to score {data.company_name} on {CRITERIA_ORDER.length} M&A attractiveness criteria.
                         You can optionally add peer companies for comparison.
                     </p>
 
@@ -249,7 +262,7 @@ export default function RatingComparison({ data }: Props) {
         );
     }
 
-    /* ── Loading state ── */
+    /* ── Full-page loading (only when explicitly running a rating) ── */
     if (loading) {
         return (
             <div className="animate-in fade-in duration-500 flex flex-col items-center justify-center min-h-[400px] text-center p-8">
@@ -262,7 +275,8 @@ export default function RatingComparison({ data }: Props) {
         );
     }
 
-    if (!peerData) return null;
+    /* ── Still initializing silently — return null (no flash) ── */
+    if (initializing || !peerData) return null;
 
     /* ── Data prep ── */
     const targetName = peerData.target_company;
@@ -301,7 +315,7 @@ export default function RatingComparison({ data }: Props) {
     });
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500">
+        <div className={`space-y-8 transition-opacity duration-500 ${visible ? 'opacity-100' : 'opacity-0'}`}>
             {/* ── Action bar ── */}
             <div className="flex flex-wrap items-center justify-between gap-3">
                 {/* Peer selection */}
@@ -382,8 +396,8 @@ export default function RatingComparison({ data }: Props) {
                                     <div className="w-52 text-sm font-medium text-gray-700 shrink-0">{criterion}</div>
                                     <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
                                         <div
-                                            className={`h-full rounded-full bg-gradient-to-r ${scoreGradient(score)} transition-all duration-700`}
-                                            style={{ width: `${(score / 5) * 100}%` }}
+                                            className={`h-full rounded-full bg-gradient-to-r ${scoreGradient(score)} transition-all duration-700 ease-out`}
+                                            style={{ width: animated ? `${(score / 5) * 100}%` : '0%' }}
                                         />
                                     </div>
                                     <div className="w-8 text-right text-sm font-bold" style={{ color: scoreColor(score) }}>
@@ -415,8 +429,8 @@ export default function RatingComparison({ data }: Props) {
                     </div>
                     <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden mb-4">
                         <div
-                            className={`h-full rounded-full bg-gradient-to-r ${scoreGradient(targetOverall)} transition-all duration-700`}
-                            style={{ width: `${(targetOverall / 5) * 100}%` }}
+                            className={`h-full rounded-full bg-gradient-to-r ${scoreGradient(targetOverall)} transition-all duration-700 ease-out`}
+                            style={{ width: animated ? `${(targetOverall / 5) * 100}%` : '0%' }}
                         />
                     </div>
                     <p className="text-xs text-gray-500 leading-relaxed">{targetSummary}</p>
@@ -450,6 +464,8 @@ export default function RatingComparison({ data }: Props) {
                                 fill="#3b82f6"
                                 fillOpacity={0.15}
                                 strokeWidth={2}
+                                animationDuration={800}
+                                animationEasing="ease-out"
                             />
                             {hasPeers && (
                                 <Radar
@@ -460,6 +476,9 @@ export default function RatingComparison({ data }: Props) {
                                     fillOpacity={0.08}
                                     strokeWidth={1.5}
                                     strokeDasharray="4 4"
+                                    animationDuration={1000}
+                                    animationEasing="ease-out"
+                                    animationBegin={200}
                                 />
                             )}
                             <Legend
@@ -467,14 +486,9 @@ export default function RatingComparison({ data }: Props) {
                                 iconType="square"
                             />
                             <Tooltip
-                                contentStyle={{
-                                    backgroundColor: '#ffffff',
-                                    border: '1px solid #e2e8f0',
-                                    borderRadius: '10px',
-                                    fontSize: '12px',
-                                    padding: '8px 14px',
-                                    boxShadow: '0 4px 12px rgb(0 0 0 / 0.08)',
-                                }}
+                                contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#0f172a', fontSize: '12px', padding: '8px 12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)' }}
+                                itemStyle={{ color: '#0f172a', fontWeight: 500, padding: 0 }}
+                                labelStyle={{ fontWeight: 600, color: '#64748b', marginBottom: '4px' }}
                             />
                         </RadarChart>
                     </ResponsiveContainer>
@@ -482,7 +496,7 @@ export default function RatingComparison({ data }: Props) {
             </div>
 
             {/* ── Comparison Table ── */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
                 <div className="p-5 border-b border-gray-50">
                     <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-[0.15em] flex items-center gap-2">
                         <BarChart3 className="w-4 h-4" />
@@ -506,35 +520,38 @@ export default function RatingComparison({ data }: Props) {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
-                            {CRITERIA_ORDER.map(criterion => (
-                                <tr key={criterion} className="hover:bg-gray-50/50 transition-colors">
+                            {CRITERIA_ORDER.map((criterion, rowIdx) => (
+                                <tr key={criterion} className="hover:bg-gray-50/50 transition-colors group/row hover:z-[60] relative">
                                     <td className="px-4 py-3 text-[13px] font-medium text-gray-700 sticky left-0 bg-white z-10 whitespace-nowrap">
                                         {criterion}
                                     </td>
                                     {companyNames.map((name) => {
                                         const detail = getScoreDetail(name, criterion);
                                         const score = detail?.score ?? 0;
+                                        // First row: tooltip appears below badge to avoid thead clipping
+                                        const isFirstRow = rowIdx === 0;
                                         return (
-                                            <td key={name} className="px-4 py-3 text-center relative group">
+                                            <td key={name} className="px-4 py-3 text-center relative group hover:z-[60]">
                                                 <span
-                                                    className="inline-flex items-center justify-center w-10 h-7 rounded-md text-xs font-bold text-white"
+                                                    className="inline-flex items-center justify-center w-10 h-7 rounded-md text-xs font-bold text-white relative z-10"
                                                     style={{ backgroundColor: scoreColor(score) }}
                                                 >
                                                     {score}
                                                 </span>
                                                 {detail && (detail.justification || detail.sub_scores) && (
-                                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-gray-900 text-gray-100 text-[11px] rounded-lg p-3 shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-20">
-                                                        {detail.justification && <p className="mb-1.5">{detail.justification}</p>}
+                                                    <div className={`absolute ${isFirstRow ? 'top-full mt-2' : 'bottom-full mb-2'} left-1/2 -translate-x-1/2 w-max max-w-sm bg-white border border-slate-200 text-slate-900 text-[12px] rounded-lg p-3 shadow-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[100]`}>
+                                                        {detail.justification && <p className="mb-2 font-medium text-slate-600 leading-relaxed text-left">{detail.justification}</p>}
                                                         {detail.sub_scores?.map((ss, j) => (
-                                                            <div key={j} className="flex justify-between text-gray-300">
-                                                                <span>{ss.metric}</span>
-                                                                <span className="font-medium text-white">
+                                                            <div key={j} className="flex justify-between items-center text-slate-500 mt-1">
+                                                                <span className="font-semibold text-[11px]">{ss.metric}</span>
+                                                                <span className="font-bold text-slate-900 text-[11px]">
                                                                     {typeof ss.value === 'number' ? ss.value.toLocaleString() : ss.value}
                                                                     {ss.score !== undefined && ` → ${ss.score}/5`}
                                                                 </span>
                                                             </div>
                                                         ))}
-                                                        <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45 -mt-1" />
+                                                        {/* Arrow */}
+                                                        <div className={`absolute ${isFirstRow ? 'bottom-full -mb-[5px] rotate-[225deg]' : 'top-full -mt-[5px] rotate-45'} left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-white border-b border-r border-slate-200`} />
                                                     </div>
                                                 )}
                                             </td>
@@ -663,14 +680,20 @@ function ProfitabilityChart({
                             label={{ value: 'USDm', angle: -90, position: 'insideLeft', style: { fontSize: 10, fill: '#9ca3af' } }} />
                         <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false}
                             label={{ value: '%', angle: 90, position: 'insideRight', style: { fontSize: 10, fill: '#9ca3af' } }} />
-                        <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '12px', padding: '8px 14px', boxShadow: '0 4px 12px rgb(0 0 0 / 0.08)' }} />
+                        <Tooltip
+                            contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#0f172a', fontSize: '12px', padding: '8px 12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)' }}
+                            itemStyle={{ color: '#0f172a', fontWeight: 500, padding: 0 }}
+                            labelStyle={{ fontWeight: 600, color: '#64748b', marginBottom: '4px' }}
+                        />
                         <Legend wrapperStyle={{ fontSize: 11, fontWeight: 500, paddingTop: 8 }} />
-                        <Bar yAxisId="left" dataKey="PAT (USDm)" radius={[4, 4, 0, 0]} barSize={32}>
+                        <Bar yAxisId="left" dataKey="PAT (USDm)" radius={[4, 4, 0, 0]} barSize={32}
+                            animationDuration={800} animationEasing="ease-out">
                             {chartData.map((entry, i) => (
                                 <Cell key={i} fill={entry.fill} fillOpacity={0.8} />
                             ))}
                         </Bar>
-                        <Line yAxisId="right" type="monotone" dataKey="ROE (%)" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 4 }} />
+                        <Line yAxisId="right" type="monotone" dataKey="ROE (%)" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 4 }}
+                            animationDuration={1000} animationEasing="ease-out" animationBegin={300} />
                     </ComposedChart>
                 </ResponsiveContainer>
             </div>

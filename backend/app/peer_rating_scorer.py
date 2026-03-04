@@ -81,6 +81,7 @@ def score_profitability(companies: list[dict]) -> dict[str, dict]:
             raw_scores.append(s)
 
         score = round(sum(raw_scores) / len(raw_scores)) if raw_scores else 3
+        logger.info("[SCORE] Profitability  '{}': sub={} → final={}", name, raw_scores, score)
         results[name] = {
             "criterion": "Contribution to Profitability",
             "score": score,
@@ -146,6 +147,7 @@ def score_transaction_size(companies: list[dict]) -> dict[str, dict]:
             raw_scores.append(s)
 
         score = round(sum(raw_scores) / len(raw_scores)) if raw_scores else 3
+        logger.info("[SCORE] Transaction   '{}': sub={} → final={}", name, raw_scores, score)
         results[name] = {
             "criterion": "Size of Transaction",
             "score": score,
@@ -156,44 +158,123 @@ def score_transaction_size(companies: list[dict]) -> dict[str, dict]:
 
 
 # ---------------------------------------------------------------------------
-# Criterion 3: Geographic / Strategic Country Fit  (COMMENTED OUT)
+# Criterion 3: Geographic / Strategic Country Fit
 # ---------------------------------------------------------------------------
-# Awaiting input on strategic country definitions (population 30m+ filter).
-#
-# STRATEGIC_COUNTRIES = {
-#     # South & Southeast Asia
-#     "Pakistan", "India", "Indonesia", "Philippines", "Vietnam",
-#     # East Africa
-#     "Tanzania", "Uganda", "Zambia", "Kenya",
-#     # Balkans
-#     "Serbia", "Slovenia",
-#     # Latin America
-#     "Chile", "Colombia", "Mexico", "Brazil", "Peru",
-# }
-#
-# def score_geographic_fit(companies: list[dict]) -> dict[str, dict]:
-#     results = {}
-#     for c in companies:
-#         countries = c.get("countries_of_operation", []) or []
-#         normalised = {cc.strip().title() for cc in countries}
-#         count = len(normalised & STRATEGIC_COUNTRIES)
-#         if count > 3:
-#             s = 5
-#         elif count >= 2:
-#             s = 4
-#         elif count == 1:
-#             s = 3
-#         else:
-#             s = 1
-#         results[c["company_name"]] = {
-#             "criterion": "Geographic / Strategic Fit",
-#             "score": s,
-#             "sub_scores": [
-#                 {"metric": "Strategic Countries", "value": count, "score": s},
-#             ],
-#             "justification": f"Covers {count} strategic countries.",
-#         }
-#     return results
+
+from app.database import get_all_country_risk_scores
+
+
+_GEO_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "matched_countries": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "company_country": {"type": "STRING"},
+                    "matched_entry": {"type": "STRING"},
+                    "score": {"type": "NUMBER"},
+                },
+                "required": ["company_country", "matched_entry", "score"],
+            },
+        }
+    },
+    "required": ["matched_countries"],
+}
+
+
+def score_geographic_fit(companies: list[dict]) -> dict[str, dict]:
+    """
+    Scores companies on Geographic / Strategic Country Fit (Criterion 3).
+
+    Strategy:
+      1. Load the full country_risk_scores table from the DB.
+      2. Pass it to the LLM together with the company's countries of operation
+         (which may differ in naming — e.g. "Vietnam" vs "Viet Nam").
+      3. LLM returns the best-matching score for each country.
+      4. Python deterministically takes max() of those scores.
+    """
+    country_table = get_all_country_risk_scores()
+    table_str = "\n".join(f"  {c}: {s}" for c, s in country_table.items())
+    client = _get_client()
+
+    results = {}
+
+    for c in companies:
+        name = c["company_name"]
+        geo_view = c.get("macroeconomic_geo_view", []) or []
+        company_countries = [g.get("country", "") for g in geo_view if g.get("country")]
+
+        if not company_countries:
+            logger.warning("[SCORE] Geographic   '{}': No countries found in macroeconomic_geo_view → default 1", name)
+            results[name] = {
+                "criterion": "Geographic / Strategic Fit",
+                "score": 1.0,
+                "sub_scores": [],
+                "justification": "No countries of operation found.",
+            }
+            continue
+
+        prompt = f"""You are a data matching assistant. 
+        
+The following is a reference table of country names and their risk scores:
+{table_str}
+
+The company operates in the following countries (which may use different spellings or abbreviations):
+{', '.join(company_countries)}
+
+Task: For each company country, find the best-matching entry in the reference table (use common sense for spelling variants like "Vietnam" vs "Viet Nam", "Democratic Republic of Congo" vs "Congo, Dem. Rep.", etc.).
+- If there is a clear match, return the matched entry name and its score.
+- If there is absolutely no match, return the matched_entry as "NOT_FOUND" and score as 1.0.
+
+Return a JSON object with a field "matched_countries" containing one entry per company country."""
+
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=_GEO_SCHEMA,
+                    temperature=0,
+                ),
+            )
+            data = json.loads(response.text)
+        except Exception:
+            logger.error("[PEER_SCORING] Geo LLM match failed for '{}':\n{}", name, traceback.format_exc())
+            data = {"matched_countries": []}
+
+        sub_scores = []
+        scores = []
+
+        for entry in data.get("matched_countries", []):
+            c_country = entry.get("company_country", "")
+            matched = entry.get("matched_entry", "NOT_FOUND")
+            score = float(entry.get("score", 1.0))
+            # Clamp to valid range
+            score = max(1.0, min(5.0, score))
+            scores.append(score)
+            sub_scores.append({
+                "metric": c_country,
+                "value": f"{matched} → {score}",
+                "score": round(score),
+            })
+
+        final_score = max(scores) if scores else 1.0
+        logger.info("[SCORE] Geographic   '{}': countries={}, matched_scores={} → max={}", name, company_countries, scores, final_score)
+
+        results[name] = {
+            "criterion": "Geographic / Strategic Fit",
+            "score": final_score,
+            "sub_scores": sub_scores,
+            "justification": (
+                f"Best country risk score: {final_score} "
+                f"(max of {len(scores)} countries matched against the reference table)."
+            ),
+        }
+
+    return results
 
 
 # ---------------------------------------------------------------------------
@@ -245,6 +326,7 @@ def score_ease_of_execution(companies: list[dict]) -> dict[str, dict]:
             raw_scores.append(conc_score)
 
         score = round(sum(raw_scores) / len(raw_scores)) if raw_scores else 3
+        logger.info("[SCORE] Ease of Exec  '{}': sub={} → final={}", name, raw_scores, score)
         results[name] = {
             "criterion": "Ease of Execution",
             "score": score,
@@ -347,12 +429,27 @@ def score_all_llm_criteria(companies: list[dict]) -> dict[str, list[dict]]:
     # Parse response: expect {company_scores: [{company_name, criteria: [{criterion, score, justification}]}]}
     results: dict[str, list[dict]] = {c["company_name"]: [] for c in companies}
 
+    # Build a normalized-name → actual-name lookup to handle whitespace/case mismatches
+    import re
+    def _norm(s: str) -> str:
+        return re.sub(r"\s+", " ", s.strip().lower())
+
+    norm_lookup = {_norm(name): name for name in results}
+    logger.debug("[PEER_SCORING] Name lookup: {}", {k: v for k, v in norm_lookup.items()})
+
     for company_entry in data.get("company_scores", []):
-        name = company_entry.get("company_name", "")
-        if name not in results:
+        raw_name = company_entry.get("company_name", "")
+        # Try exact match first, then normalized match
+        if raw_name in results:
+            matched_name = raw_name
+        else:
+            matched_name = norm_lookup.get(_norm(raw_name))
+        if matched_name is None:
+            logger.warning("[PEER_SCORING] LLM returned unknown company '{}' (normalized: '{}'), skipping", raw_name, _norm(raw_name))
             continue
+        logger.info("[PEER_SCORING] Matched LLM company '{}' → '{}'", raw_name, matched_name)
         for crit_entry in company_entry.get("criteria", []):
-            results[name].append({
+            results[matched_name].append({
                 "criterion": crit_entry.get("criterion", ""),
                 "score": max(1, min(5, crit_entry.get("score", 3))),
                 "justification": crit_entry.get("justification", ""),
@@ -380,7 +477,7 @@ def score_all_llm_criteria(companies: list[dict]) -> dict[str, list[dict]]:
 ALL_CRITERIA = [
     "Contribution to Profitability",
     "Size of Transaction",
-    # "Geographic / Strategic Fit",  # Commented out — awaiting input
+    "Geographic / Strategic Fit",
     "Product / Market Strategy Fit",
     "Ease of Execution",
     "Quality & Depth of Management",
@@ -408,25 +505,34 @@ def compute_all_scores(companies: list[dict]) -> dict:
     profitability = score_profitability(companies)
     for name, result in profitability.items():
         all_scores[name].append(result)
+    logger.info("[PEER_SCORING] ✓ Profitability scores computed")
 
     transaction_size = score_transaction_size(companies)
     for name, result in transaction_size.items():
         all_scores[name].append(result)
+    logger.info("[PEER_SCORING] ✓ Transaction Size scores computed")
 
-    # Geographic fit — commented out
-    # geographic = score_geographic_fit(companies)
-    # for name, result in geographic.items():
-    #     all_scores[name].append(result)
+    geographic = score_geographic_fit(companies)
+    for name, result in geographic.items():
+        all_scores[name].append(result)
+    logger.info("[PEER_SCORING] ✓ Geographic Fit scores computed")
 
     ease_of_exec = score_ease_of_execution(companies)
     for name, result in ease_of_exec.items():
         all_scores[name].append(result)
+    logger.info("[PEER_SCORING] ✓ Ease of Execution scores computed")
 
     # ── LLM-evaluated criteria (single call) ────────────────────────────────
     llm_results = score_all_llm_criteria(companies)
     for name, criterion_scores in llm_results.items():
         if name in all_scores:
             all_scores[name].extend(criterion_scores)
+    logger.info("[PEER_SCORING] ✓ LLM criteria scores computed")
+
+    # Log the full score breakdown per company
+    for name, scores in all_scores.items():
+        for s in scores:
+            logger.info("[PEER_SCORING] {} | {:40s} → {}", name, s['criterion'], s['score'])
 
     # ── Overall scores (simple average, no weights — weights applied in UI) ─
     overall_scores = {}

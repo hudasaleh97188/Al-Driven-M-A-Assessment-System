@@ -82,10 +82,9 @@ Analyse all 7 dimensions using the detailed sub-checks below:
    - Evaluate loan concentration risks across geography, sector, or borrower exposures.
 
 3. CAPITAL & SOLVENCY RISKS
-   - Review CAR trajectory versus regulatory minimums and available buffers.
-   - Assess equity erosion arising from FX losses, impairments, or recurring operational losses.
+   - Review CAR or  Equity/ GLP trajectory versus regulatory minimums and available buffers.
+   - Assess Capital strength  in conjunction with CAR levels (or Equity/ GLP) and loan portfolio quality rather than equity in isolation, reflecting an integrated view of solvency resilience.
    - Identify subsidiary-level capital breaches that may be masked by consolidated reporting.
-   - Note: Capital strength will be assessed in conjunction with CAR levels and loan portfolio quality rather than equity in isolation, reflecting an integrated view of solvency resilience.
 
 4. OPERATIONAL & SCALE RISKS
    - Monitor productivity and efficiency metrics (e.g., total operating revenue per employee, loans per branch).

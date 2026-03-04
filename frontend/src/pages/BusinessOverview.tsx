@@ -267,10 +267,10 @@ export default function BusinessOverview({ data }: { data: AnalysisData }) {
                                                 <td className="px-4 py-3 whitespace-nowrap text-[13px] text-gray-600 font-medium">{g.population || 'N/A'}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-[13px] text-gray-600 font-medium">{g.gdp_per_capita_ppp || 'N/A'}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-[13px] text-gray-600 font-medium">{g.gdp_growth_forecast || 'N/A'}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-[13px] text-gray-600 font-medium max-w-[100px] truncate">{g.inflation || 'N/A'}</td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-[13px] text-gray-600 font-medium">{g.inflation || 'N/A'}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-[13px] text-gray-600 font-medium">{g.central_bank_interest_rate || 'N/A'}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-[13px] text-gray-600 font-medium">{g.unemployment_rate || 'N/A'}</td>
-                                                <td className="px-4 py-3 text-[13px] text-gray-600 font-medium max-w-[140px] truncate">{g.country_risk_rating || 'N/A'}</td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-[13px] text-gray-600 font-medium">{g.country_risk_rating || 'N/A'}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-[13px] text-gray-600 font-medium">{g.corruption_perceptions_index_rank || 'N/A'}</td>
                                             </tr>
                                         ))}
