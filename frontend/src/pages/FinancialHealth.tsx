@@ -1,4 +1,4 @@
-import { TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
+import { TrendingUp, TrendingDown, AlertTriangle, Info } from 'lucide-react';
 import MetricCard from '../components/MetricCard';
 import RiskCard from '../components/RiskCard';
 import RatioBar from '../components/RatioBar';
@@ -16,7 +16,7 @@ export default function FinancialHealth({ data }: { data: AnalysisData }) {
     const firstYear = first?.year;
 
     const pctDelta = (a?: number, b?: number) =>
-        a !== undefined && b !== undefined && b !== 0 ? ((a - b) / b) * 100 : undefined;
+        a !== undefined && b !== undefined && b !== 0 ? ((a - b) / Math.abs(b)) * 100 : undefined;
 
     const ppDelta = (a?: number, b?: number) =>
         a !== undefined && b !== undefined ? a - b : undefined;
@@ -32,7 +32,14 @@ export default function FinancialHealth({ data }: { data: AnalysisData }) {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                     <MetricCard title="Total Operating Revenue" value={lf?.total_operating_revenue} delta={pctDelta(lf?.total_operating_revenue, ff?.total_operating_revenue)} chartData={chartOf('total_operating_revenue')} baselineYear={firstYear} latestYear={latYear} />
                     <MetricCard title="EBITDA" value={lf?.ebitda} delta={pctDelta(lf?.ebitda, ff?.ebitda)} chartData={chartOf('ebitda')} baselineYear={firstYear} latestYear={latYear} />
-                    <MetricCard title="PAT (Net Income)" value={lf?.pat} delta={pctDelta(lf?.pat, ff?.pat)} chartData={chartOf('pat')} baselineYear={firstYear} latestYear={latYear} />
+                    <MetricCard
+                        title={
+                            <span className="flex items-center gap-1.5" title="overall performance including any discontinued operations">
+                                PAT (Net Income)
+                                <Info size={12} className="text-gray-400 hover:text-gray-600 cursor-help" />
+                            </span>
+                        }
+                        value={lf?.pat} delta={pctDelta(lf?.pat, ff?.pat)} chartData={chartOf('pat')} baselineYear={firstYear} latestYear={latYear} />
                     <MetricCard title="Total Equity" value={lf?.total_equity} delta={pctDelta(lf?.total_equity, ff?.total_equity)} chartData={chartOf('total_equity')} baselineYear={firstYear} latestYear={latYear} />
                     {/* Credit Rating */}
                     <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100/80 hover:shadow-md transition-shadow">
@@ -71,7 +78,7 @@ export default function FinancialHealth({ data }: { data: AnalysisData }) {
                 <SectionBar color="bg-teal-500" title={`Asset Quality & Loan Book${latYear ? ` (${latYear})` : ''}`} />
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
                     <MetricCard title="Net Interest Margin" value={lf?.nim_percent} isRatio delta={ppDelta(lf?.nim_percent, ff?.nim_percent)} chartData={chartOf('nim_percent')} baselineYear={firstYear} latestYear={latYear} />
-                    <MetricCard title="CAR Tier 1" value={lf?.car_tier_1_percent} isRatio delta={ppDelta(lf?.car_tier_1_percent, ff?.car_tier_1_percent)} chartData={chartOf('car_tier_1_percent')} baselineYear={firstYear} latestYear={latYear} />
+                    <MetricCard title="Equity / GLP" value={lf?.equity_to_glp_percent} isRatio delta={ppDelta(lf?.equity_to_glp_percent, ff?.equity_to_glp_percent)} chartData={chartOf('equity_to_glp_percent')} baselineYear={firstYear} latestYear={latYear} />
                     <RatioBar ratio={lf?.depositors_vs_borrowers_ratio ?? 0} />
                 </div>
 
@@ -140,7 +147,7 @@ function YoYBadge({ current, previous, isRatio = false, isNegativeGood = false }
         label = `${diff > 0 ? '+' : ''}${diff.toFixed(2)} pp`;
     } else {
         if (previous === 0) return null;
-        diff = ((current - previous) / previous) * 100;
+        diff = ((current - previous) / Math.abs(previous)) * 100;
         label = `${diff > 0 ? '+' : ''}${diff.toFixed(1)}%`;
     }
     if (Math.abs(diff) < 0.01) return null;

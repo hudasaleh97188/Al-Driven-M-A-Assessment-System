@@ -18,6 +18,7 @@ import traceback
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from loguru import logger
 
 # ── Bootstrap logging before anything else ──────────────────────────────────
@@ -32,11 +33,14 @@ from app.database import (
     delete_company,
     get_all_analyses,
     get_latest_analysis,
+    get_peer_rating,
     init_db,
+    save_peer_rating,
     update_run,
     upsert_company,
 )
 from app.extractor import run_pipeline
+from app.peer_rating import run_peer_rating
 from app.ratios import enrich_financial_data
 
 # ---------------------------------------------------------------------------
@@ -120,6 +124,21 @@ async def analyze_company(
         currency = result_data.get("currency", "USD")
         update_run(run_id, status="completed", result=result_data, currency=currency)
 
+        # Auto-run 1-5 M&A scoring and cache to peer_ratings table
+        try:
+            logger.info("[API] Auto-running M&A Scoring for '{}'", company_name)
+            
+            # Ensure ratios exist before scoring
+            if "financial_data" in result_data:
+                enrich_financial_data(result_data["financial_data"])
+                
+            result_data["company_name"] = company_name
+            peer_rating_result = run_peer_rating(result_data, [])
+            save_peer_rating(company_name, peer_rating_result)
+        except Exception as exc:
+            logger.error("[API] Auto-scoring failed for '{}':\n{}", company_name, traceback.format_exc())
+
+
         # Build response (same shape the frontend already expects)
         response = {
             "company_name": company_name,
@@ -170,6 +189,55 @@ def delete_company_analysis(company_name: str):
     if not deleted:
         raise HTTPException(status_code=404, detail="Company not found")
     return {"message": f"Analysis for '{company_name}' deleted successfully"}
+
+
+class PeerRatingRequest(BaseModel):
+    peers: list[str] = []
+
+@app.post("/api/peer-rating/{company_name}")
+async def run_peer_rating_endpoint(company_name: str, request: PeerRatingRequest):
+    """
+    Run the peer rating pipeline for a company.
+    Requires an existing completed analysis.
+    """
+    logger.info("[API] POST /api/peer-rating – company='{}'", company_name)
+
+    analysis = get_latest_analysis(company_name)
+    if not analysis:
+        raise HTTPException(status_code=404, detail="No analysis found. Please analyze the company first.")
+
+    # Ensure computed ratios exist
+    if "financial_data" in analysis:
+        enrich_financial_data(analysis["financial_data"])
+
+    peer_analyses = []
+    for peer_name in request.peers:
+        p_analysis = get_latest_analysis(peer_name)
+        if p_analysis:
+            if "financial_data" in p_analysis:
+                enrich_financial_data(p_analysis["financial_data"])
+            peer_analyses.append(p_analysis)
+        else:
+            logger.warning("[API] Suggested peer '{}' not found in database.", peer_name)
+
+    try:
+        result = run_peer_rating(analysis, peer_analyses)
+    except Exception as exc:
+        logger.error("[API] Peer rating failed for '{}':\n{}", company_name, traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Peer rating failed: {exc}")
+
+    # Persist result
+    save_peer_rating(company_name, result)
+    return result
+
+
+@app.get("/api/peer-rating/{company_name}")
+def get_peer_rating_endpoint(company_name: str):
+    """Return the cached peer rating for a company."""
+    data = get_peer_rating(company_name)
+    if not data:
+        raise HTTPException(status_code=404, detail="No peer rating found")
+    return data
 
 
 # ---------------------------------------------------------------------------

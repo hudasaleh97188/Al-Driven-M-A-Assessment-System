@@ -15,10 +15,10 @@ def setup_logging() -> None:
     # Remove default handler to avoid duplicate console output
     logger.remove()
 
-    # Console sink – INFO and above
+    # Console sink – DEBUG and above
     logger.add(
         sys.stdout,
-        level="INFO",
+        level="DEBUG",
         format=(
             "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
             "<level>{level: <8}</level> | "

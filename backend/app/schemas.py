@@ -134,20 +134,7 @@ _FINANCIAL_DATA_ITEM = {
                     "type": "NUMBER",
                     "description": "Company's accounting net worth (assets minus liabilities)",
                 },
-                "tier_1_capital": {
-                    "type": "NUMBER",
-                    "description": (
-                        "Regulatory Tier 1 capital (CET1 / Core Capital from Basel disclosures). "
-                        "NOT simply Total Equity. Return null if not disclosed."
-                    ),
-                },
-                "risk_weighted_assets": {
-                    "type": "NUMBER",
-                    "description": (
-                        "Risk-Weighted Assets from Basel / regulatory disclosures. "
-                        "NOT the gross loan portfolio. Return null if not disclosed."
-                    ),
-                },
+
                 "disbursals": {
                     "type": "NUMBER",
                     "description": "Loans disbursed during the year",

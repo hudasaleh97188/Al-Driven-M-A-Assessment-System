@@ -195,14 +195,14 @@ def deep_dive_macro_and_management(
 
     # ── Log the full request ────────────────────────────────────────────────
     logger.info(
-        "[LLM_REQUEST] Stage 3 | model='gemini-2.5-pro' | company='{}' | countries={} | mgmt_count={} | tools=[GoogleSearch] | temp=0",
+        "[LLM_REQUEST] Stage 3 | model='gemini-3-pro-preview' | company='{}' | countries={} | mgmt_count={} | tools=[GoogleSearch] | temp=0",
         company_name, countries, len(management),
     )
     logger.debug("[LLM_REQUEST] Stage 3 – Full prompt:\n{}", prompt)
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-pro",
+            model="gemini-3-pro-preview",
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
@@ -211,7 +211,7 @@ def deep_dive_macro_and_management(
                 temperature=0,
             ),
         )
-    except Exception as exc:
+    except Exception:
         logger.error("[LLM_ERROR] Stage 3 – API call failed:\n{}", traceback.format_exc())
         raise
 

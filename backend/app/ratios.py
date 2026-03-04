@@ -30,7 +30,7 @@ def compute_ratios(financial_health: dict) -> dict:
     par_30_percent              = Arrears >30d / Gross Loan Portfolio × 100
     gnpa_percent                = Gross NPL / Gross Loan Portfolio × 100
     provision_coverage_percent  = Provisions / Gross Loan Portfolio × 100
-    car_tier_1_percent          = Tier 1 Capital / Risk-Weighted Assets × 100
+    equity_to_glp_percent       = Total Equity / Gross Loan Portfolio × 100
     depositors_vs_borrowers_ratio = Debts to Clients / Debts to FIs (string, 2dp)
     """
     fh = financial_health  # alias for brevity
@@ -45,8 +45,7 @@ def compute_ratios(financial_health: dict) -> dict:
     arrears_30     = fh.get("loans_with_arrears_over_30_days")
     gnpa_val       = fh.get("gross_non_performing_loans")
     provisions     = fh.get("total_loan_loss_provisions")
-    tier1          = fh.get("tier_1_capital")
-    rwa            = fh.get("risk_weighted_assets")
+
     debts_clients  = fh.get("debts_to_clients")
     debts_fi       = fh.get("debts_to_financial_institutions")
 
@@ -62,7 +61,7 @@ def compute_ratios(financial_health: dict) -> dict:
     _set("par_30_percent",                safe_divide(arrears_30, gross_loans))
     _set("gnpa_percent",                  safe_divide(gnpa_val, gross_loans))
     _set("provision_coverage_percent",    safe_divide(provisions, gross_loans))
-    _set("car_tier_1_percent",            safe_divide(tier1, rwa))
+    _set("equity_to_glp_percent",         safe_divide(total_equity, gross_loans))
 
     dep_borr = safe_divide(debts_clients, debts_fi)
     if dep_borr is not None:

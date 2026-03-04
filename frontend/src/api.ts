@@ -1,4 +1,4 @@
-import type { AnalysisData, AnalysisListItem } from './types';
+import type { AnalysisData, AnalysisListItem, PeerRatingResult } from './types';
 
 const API_BASE = 'http://localhost:5050';
 
@@ -36,4 +36,23 @@ export async function deleteAnalysis(companyName: string): Promise<void> {
         method: 'DELETE',
     });
     if (!res.ok) throw new Error('Failed to delete');
+}
+
+export async function runPeerRating(companyName: string, peers: string[]): Promise<PeerRatingResult> {
+    const res = await fetch(`${API_BASE}/api/peer-rating/${encodeURIComponent(companyName)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ peers }),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Peer rating failed' }));
+        throw new Error(err.detail || 'Peer rating failed');
+    }
+    return res.json();
+}
+
+export async function fetchPeerRating(companyName: string): Promise<PeerRatingResult> {
+    const res = await fetch(`${API_BASE}/api/peer-rating/${encodeURIComponent(companyName)}`);
+    if (!res.ok) throw new Error('No peer rating found');
+    return res.json();
 }

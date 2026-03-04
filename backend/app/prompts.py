@@ -48,14 +48,13 @@ Extract values for ALL years present in the reports. Determine the primary repor
    - Gross Non-Performing Loans / NPL (loans >90 days past due)
    - Total Loan Loss Provisions
    - Total Equity
-   - Tier 1 Capital (regulatory capital as reported to the regulator — NOT simply Total Equity. Look for CET1, Tier 1 Core Capital, or Basel III disclosures. If no regulatory Tier 1 figure is disclosed, return null.)
-   - Risk-Weighted Assets (from Basel / regulatory disclosures — NOT the gross loan portfolio. RWAs include credit, market, and operational risk weightings. If no RWA figure is disclosed, return null.)
+
    - Disbursals (loans disbursed during the year)
    - Debts to clients (customer deposits)
    - Debts to financial institutions (borrowings)
    - Credit Rating (Group-level issuer rating. If only a subsidiary or instrument rating exists, prefix with the entity name, e.g. "Baobab Nigeria: BBB+". If no rating exists, return null.)
 
-   CRITICAL: Tier 1 Capital is NOT the same as Total Equity. Risk-Weighted Assets are NOT the same as Gross Loan Portfolio. Only extract these from explicit regulatory / Basel disclosures. If the annual report does not contain these regulatory metrics, return null.
+
 
    NOTE: Calculate metrics that require arithmetic. If a value cannot be found or calculated, return null.
 

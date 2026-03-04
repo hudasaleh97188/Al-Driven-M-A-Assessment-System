@@ -169,7 +169,7 @@ export default function App() {
                         {/* Active page */}
                         {tab === 'overview' && <BusinessOverview data={data} />}
                         {tab === 'financial' && <FinancialHealth data={data} />}
-                        {tab === 'rating' && <RatingComparison />}
+                        {tab === 'rating' && <RatingComparison data={data} />}
                     </div>
                 )}
             </main>

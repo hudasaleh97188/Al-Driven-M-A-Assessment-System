@@ -2,7 +2,7 @@ import { TrendingUp, TrendingDown } from 'lucide-react';
 import { BarChart, Bar, Cell, Tooltip, ResponsiveContainer, XAxis } from 'recharts';
 
 interface MetricCardProps {
-    title: string;
+    title: React.ReactNode | string;
     value?: number | string | null;
     delta?: number;
     isRatio?: boolean;

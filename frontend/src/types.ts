@@ -58,7 +58,7 @@ export interface FinancialHealth {
     par_30_percent?: number;
     gnpa_percent?: number;
     provision_coverage_percent?: number;
-    car_tier_1_percent?: number;
+    equity_to_glp_percent?: number;
     depositors_vs_borrowers_ratio?: number;
     total_loan_outstanding?: number;
 }
@@ -126,4 +126,48 @@ export interface AnalysisData {
 export interface AnalysisListItem {
     company_name: string;
     analyzed_at: string;
+}
+
+// ── Peer Rating Types ──
+
+export interface PeerCompanyData {
+    company_name: string;
+    pat?: number;
+    total_equity?: number;
+    roe?: number;
+    gross_loan_portfolio?: number;
+    countries_of_operation?: string[];
+    products_and_services?: string;
+    is_publicly_listed?: boolean;
+    number_of_shareholders?: number;
+    strategic_partners?: string[];
+    management_summary?: string;
+    it_summary?: string;
+    currency?: string;
+}
+
+export interface SubScore {
+    metric: string;
+    value: number | string;
+    score: number;
+}
+
+export interface CriterionScore {
+    criterion: string;
+    score: number;
+    justification?: string;
+    sub_scores?: SubScore[];
+}
+
+export interface PeerRatingResult {
+    target_company: string;
+    companies: PeerCompanyData[];
+    scores: { [company_name: string]: CriterionScore[] };
+    overall_scores: { [company_name: string]: number };
+    summaries: { [company_name: string]: string };
+    error?: string;
+}
+
+export interface PeerRatingWeights {
+    [criterion: string]: number;
 }

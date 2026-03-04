@@ -42,6 +42,14 @@ CREATE TABLE IF NOT EXISTS analysis_runs (
     result_json   TEXT,
     error_message TEXT
 );
+
+CREATE TABLE IF NOT EXISTS peer_ratings (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id  INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    run_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    result_json TEXT,
+    UNIQUE(company_id)
+);
 """
 
 # ---------------------------------------------------------------------------
@@ -156,6 +164,39 @@ def get_all_analyses() -> List[Dict]:
                ORDER BY analyzed_at DESC"""
         ).fetchall()
     return [{"company_name": r["company_name"], "analyzed_at": r["analyzed_at"]} for r in rows]
+
+
+def save_peer_rating(company_name: str, result: dict) -> None:
+    """Upsert peer rating result for a company."""
+    company_id = upsert_company(company_name)
+    with _get_conn() as conn:
+        conn.execute(
+            """INSERT INTO peer_ratings (company_id, result_json)
+               VALUES (?, ?)
+               ON CONFLICT(company_id) DO UPDATE SET
+                   result_json = excluded.result_json,
+                   run_at = CURRENT_TIMESTAMP""",
+            (company_id, json.dumps(result)),
+        )
+        conn.commit()
+    logger.info("[DB] Saved peer rating for '{}'", company_name)
+
+
+def get_peer_rating(company_name: str) -> Optional[Dict]:
+    """Return the peer rating for a company, or None."""
+    with _get_conn() as conn:
+        row = conn.execute(
+            """SELECT pr.result_json, pr.run_at
+               FROM peer_ratings pr
+               JOIN companies c ON c.id = pr.company_id
+               WHERE c.name = ?
+               ORDER BY pr.run_at DESC
+               LIMIT 1""",
+            (company_name,),
+        ).fetchone()
+    if not row or not row["result_json"]:
+        return None
+    return json.loads(row["result_json"])
 
 
 def delete_company(company_name: str) -> bool:

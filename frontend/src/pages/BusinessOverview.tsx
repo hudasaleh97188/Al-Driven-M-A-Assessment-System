@@ -1,7 +1,6 @@
 import { Globe, Users, Building, Contact, Briefcase, MapPin, Shield, Target } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 import type { AnalysisData } from '../types';
-import RatingComparison from './RatingComparison';
 
 const COLORS = ['#3b82f6', '#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#ef4444', '#06b6d4'];
 
@@ -56,7 +55,7 @@ export default function BusinessOverview({ data }: { data: AnalysisData }) {
                 {/* Stats row */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                     <StatCard icon={<Building className="w-4 h-4" />} label="Branches" value={scale?.number_of_branches} />
-                    <StatCard icon={<Users className="w-4 h-4" />} label="Employees" value={scale?.number_of_employees} />
+                    <StatCard icon={<Users className="w-4 h-4" />} label="Employees" value={scale?.number_of_employees ? `${Math.floor(scale.number_of_employees / 10) * 10}+` : undefined} />
                     <StatCard icon={<Contact className="w-4 h-4" />} label="Customers" value={scale?.number_of_borrowers} />
                     <StatCard icon={<Globe className="w-4 h-4" />} label="Countries" value={ov?.countries_of_operation?.length} />
                 </div>
@@ -245,7 +244,40 @@ export default function BusinessOverview({ data }: { data: AnalysisData }) {
                 <section>
                     <SectionHeader icon={<Globe className="w-4 h-4" />} title="Microfinance Geo-View" color="teal" />
                     <div className="mt-4">
-                        <RatingComparison data={data} />
+                        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-white border-b border-gray-100">
+                                            <th className="px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Country</th>
+                                            <th className="px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Population</th>
+                                            <th className="px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">GDP/Cap (PPP)</th>
+                                            <th className="px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">GDP Growth</th>
+                                            <th className="px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Inflation</th>
+                                            <th className="px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Interest Rate</th>
+                                            <th className="px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Unemployment</th>
+                                            <th className="px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Risk Score</th>
+                                            <th className="px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">CPI</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-50">
+                                        {data.macroeconomic_geo_view.map(g => (
+                                            <tr key={g.country} className="hover:bg-gray-50/50 transition-colors">
+                                                <td className="px-4 py-3 whitespace-nowrap"><div className="font-bold text-gray-900 text-[13px]">{g.country}</div></td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-[13px] text-gray-600 font-medium">{g.population || 'N/A'}</td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-[13px] text-gray-600 font-medium">{g.gdp_per_capita_ppp || 'N/A'}</td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-[13px] text-gray-600 font-medium">{g.gdp_growth_forecast || 'N/A'}</td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-[13px] text-gray-600 font-medium max-w-[100px] truncate">{g.inflation || 'N/A'}</td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-[13px] text-gray-600 font-medium">{g.central_bank_interest_rate || 'N/A'}</td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-[13px] text-gray-600 font-medium">{g.unemployment_rate || 'N/A'}</td>
+                                                <td className="px-4 py-3 text-[13px] text-gray-600 font-medium max-w-[140px] truncate">{g.country_risk_rating || 'N/A'}</td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-[13px] text-gray-600 font-medium">{g.corruption_perceptions_index_rank || 'N/A'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </section>
             )}
@@ -273,12 +305,12 @@ function SectionHeader({ icon, title, color }: { icon: React.ReactNode; title: s
     );
 }
 
-function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value?: number }) {
+function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value?: number | string }) {
     return (
         <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center flex-shrink-0">{icon}</div>
             <div>
-                <div className="text-xl font-bold text-gray-900">{value?.toLocaleString() ?? '—'}</div>
+                <div className="text-xl font-bold text-gray-900">{value !== undefined ? (typeof value === 'number' ? value.toLocaleString() : value) : '—'}</div>
                 <div className="text-[11px] text-gray-400 font-medium uppercase tracking-wider">{label}</div>
             </div>
         </div>
