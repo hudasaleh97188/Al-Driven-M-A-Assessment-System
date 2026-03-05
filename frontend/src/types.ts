@@ -112,6 +112,7 @@ export interface ManagementQuality {
 }
 
 export interface AnalysisData {
+    company_id?: number;
     company_name: string;
     currency: string;
     company_overview: CompanyOverview;
@@ -131,6 +132,7 @@ export interface AnalysisListItem {
 // ── Peer Rating Types ──
 
 export interface PeerCompanyData {
+    company_id?: number;
     company_name: string;
     pat?: number;
     total_equity?: number;

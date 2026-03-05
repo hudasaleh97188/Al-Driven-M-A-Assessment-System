@@ -143,6 +143,11 @@ export default function App() {
                         <div className="mb-8">
                             <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight mb-2 capitalize">{data.company_name}</h1>
                             <div className="flex flex-wrap gap-2">
+                                {data.company_id && (
+                                    <span className="px-3 py-1 bg-violet-50 text-violet-700 rounded-full text-xs font-medium border border-violet-100">
+                                        ID: {data.company_id}
+                                    </span>
+                                )}
                                 {data.currency && (
                                     <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium border border-blue-100">
                                         {data.currency}

@@ -47,8 +47,7 @@ CREATE TABLE IF NOT EXISTS peer_ratings (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     company_id  INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     run_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
-    result_json TEXT,
-    UNIQUE(company_id)
+    result_json TEXT
 );
 
 CREATE TABLE IF NOT EXISTS country_risk_scores (
@@ -126,6 +125,12 @@ def update_run(run_id: int, *, status: str, result: Optional[dict] = None,
                currency: Optional[str] = None, error: Optional[str] = None) -> None:
     """Update an analysis_run with its final result or error."""
     with _get_conn() as conn:
+        if result:
+            # Inject company_id into result_json so it's persisted
+            row = conn.execute("SELECT company_id FROM analysis_runs WHERE id = ?", (run_id,)).fetchone()
+            if row:
+                result["company_id"] = row["company_id"]
+
         conn.execute(
             """UPDATE analysis_runs
                SET status = ?, result_json = ?, currency = ?, error_message = ?,
@@ -189,15 +194,19 @@ def get_all_analyses() -> List[Dict]:
 
 
 def save_peer_rating(company_name: str, result: dict) -> None:
-    """Upsert peer rating result for a company."""
-    company_id = upsert_company(company_name)
+    """Insert peer rating result for a company."""
     with _get_conn() as conn:
+        row = conn.execute("SELECT id FROM companies WHERE name = ?", (company_name,)).fetchone()
+        if not row:
+            logger.error("[DB] save_peer_rating failed: Company '{}' not found in companies table", company_name)
+            return
+
+        company_id = row["id"]
+        result["company_id"] = company_id
+        
         conn.execute(
             """INSERT INTO peer_ratings (company_id, result_json)
-               VALUES (?, ?)
-               ON CONFLICT(company_id) DO UPDATE SET
-                   result_json = excluded.result_json,
-                   run_at = CURRENT_TIMESTAMP""",
+               VALUES (?, ?)""",
             (company_id, json.dumps(result)),
         )
         conn.commit()
@@ -208,7 +217,7 @@ def get_peer_rating(company_name: str) -> Optional[Dict]:
     """Return the peer rating for a company, or None."""
     with _get_conn() as conn:
         row = conn.execute(
-            """SELECT pr.result_json, pr.run_at
+            """SELECT c.id AS company_id, pr.result_json, pr.run_at
                FROM peer_ratings pr
                JOIN companies c ON c.id = pr.company_id
                WHERE c.name = ?
@@ -218,7 +227,10 @@ def get_peer_rating(company_name: str) -> Optional[Dict]:
         ).fetchone()
     if not row or not row["result_json"]:
         return None
-    return json.loads(row["result_json"])
+        
+    data = json.loads(row["result_json"])
+    data["company_id"] = row["company_id"]
+    return data
 
 
 def delete_company(company_name: str) -> bool:

@@ -172,6 +172,7 @@ def run_peer_rating(analysis_data: dict, peer_analyses: list[dict]) -> dict:
     clean_companies = []
     for c in all_companies:
         clean = {
+            "company_id": c.get("company_id"),
             "company_name": c["company_name"],
             "pat": c.get("pat"),
             "total_equity": c.get("total_equity"),
