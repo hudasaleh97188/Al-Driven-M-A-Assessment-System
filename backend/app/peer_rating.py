@@ -40,9 +40,8 @@ def _extract_target_data(analysis: dict) -> dict:
     scale = overview.get("operational_scale", {})
     shareholders = overview.get("shareholder_structure", [])
 
-    # Determine if publicly listed based on shareholder count and names
-    # (heuristic — LLM will refine for competitors)
-    is_public = len(shareholders) > 5
+    # Use the LLM-extracted boolean from Stage 2 (falls back to False)
+    is_public = analysis.get("is_publicly_listed", False)
 
     return {
         "company_id": analysis.get("company_id"),
@@ -62,7 +61,6 @@ def _extract_target_data(analysis: dict) -> dict:
             {
                 "name": m.get("name", ""),
                 "position": m.get("position", ""),
-                "years_experience": None,
                 "previous_roles": None,
             }
             for m in overview.get("management_team", [])
@@ -96,7 +94,6 @@ def _enrich_target_management(target: dict, analysis: dict) -> dict:
             )
             if match:
                 m["previous_roles"] = match.get("previous_experience", "")
-                m["years_experience"] = None  # Parsed from text if available
             enriched_mgmt.append(m)
         target["management_team"] = enriched_mgmt
     return target
@@ -216,9 +213,7 @@ def _summarise_management(team: list) -> str:
     for m in team[:4]:
         name = m.get("name", "Unknown")
         pos = m.get("position", "")
-        exp = m.get("years_experience")
-        exp_str = f", {exp}y exp" if exp else ""
-        parts.append(f"{name} ({pos}{exp_str})")
+        parts.append(f"{name} ({pos})")
     return "; ".join(parts)
 
 

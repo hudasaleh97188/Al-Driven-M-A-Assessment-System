@@ -115,11 +115,6 @@ def extract_base_pdf(
 
     data = _parse_json_response(response.text, "1")
 
-    # Compute derived ratios in Python (keeps the LLM prompt simple)
-    if data and "financial_data" in data:
-        data["financial_data"] = enrich_financial_data(data["financial_data"])
-        logger.info("[STAGE1] Enriched financial data with computed ratios for {} year(s)", len(data["financial_data"]))
-
     return data
 
 
@@ -291,6 +286,8 @@ def run_pipeline(
 
             if stage2.get("quality_of_it"):
                 data["quality_of_it"] = stage2["quality_of_it"]
+            if "is_publicly_listed" in stage2:
+                data["is_publicly_listed"] = stage2["is_publicly_listed"]
             logger.info("[PIPELINE] Stage 2 complete – merged successfully")
         else:
             logger.warning("[PIPELINE] Stage 2 returned empty result – using Stage 1 data only")

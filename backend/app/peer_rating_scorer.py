@@ -161,27 +161,70 @@ def score_transaction_size(companies: list[dict]) -> dict[str, dict]:
 # Criterion 3: Geographic / Strategic Country Fit
 # ---------------------------------------------------------------------------
 
-from app.database import get_all_country_risk_scores
+import re
 
+def _parse_population(text: str) -> int:
+    # IF(Population (in millian)<53,1,IF(Population in millian <79,2,IF(Population in millian <139,3,4)))
+    try:
+        match = re.search(r'([\d.]+)\s*million', text, re.IGNORECASE)
+        if match:
+            pop_m = float(match.group(1))
+            if pop_m < 53: return 1
+            if pop_m < 79: return 2
+            if pop_m < 139: return 3
+            return 4
+    except Exception:
+        pass
+    return 1
 
-_GEO_SCHEMA = {
-    "type": "OBJECT",
-    "properties": {
-        "matched_countries": {
-            "type": "ARRAY",
-            "items": {
-                "type": "OBJECT",
-                "properties": {
-                    "company_country": {"type": "STRING"},
-                    "matched_entry": {"type": "STRING"},
-                    "score": {"type": "NUMBER"},
-                },
-                "required": ["company_country", "matched_entry", "score"],
-            },
-        }
-    },
-    "required": ["matched_countries"],
-}
+def _parse_risk(text: str) -> int:
+    # IFS(Risk Score="L",4,Risk Score="ML",4,Risk Score="M",4,Risk Score="MH",3,Risk Score="H",2,Risk Score="VH",1)
+    t = str(text).lower()
+    if "very high" in t or "vh" in t: return 1
+    if "moderate-high" in t or "mh" in t: return 3
+    if "high" in t or "h" in t: return 2
+    if "moderate-low" in t or "ml" in t: return 4
+    if "moderate" in t or "m" in t: return 4
+    if "low" in t or "l" in t: return 4
+    return 1
+
+def _parse_cpi(text: str) -> int:
+    # IF(CPI score<26,1,IF(CPI score<34,2,IF(CPI score<37,3,4)))
+    # Format e.g. "82 (Score 41)", fallback: try to find "score NN"
+    try:
+        match = re.search(r'score\s*([\d.]+)', text, re.IGNORECASE)
+        if match:
+            cpi = float(match.group(1))
+        else:
+            nums = re.findall(r'\b(\d+)\b', text)
+            if len(nums) >= 2:
+                cpi = float(nums[-1])  # "82 (Score 41)" -> 41
+            elif nums:
+                cpi = float(nums[-1])
+            else:
+                return 1
+                
+        if cpi < 26: return 1
+        if cpi < 34: return 2
+        if cpi < 37: return 3
+        return 4
+    except Exception:
+        pass
+    return 1
+
+def _parse_gdp_growth(text: str) -> int:
+    # IF(GP growth<2.7%,1,IF(GP growth<4.6,2,IF(GP growth<6.2,3,4)))
+    try:
+        match = re.search(r'([\d.]+)\s*%', text)
+        if match:
+            gdp = float(match.group(1))
+            if gdp < 2.7: return 1
+            if gdp < 4.6: return 2
+            if gdp < 6.2: return 3
+            return 4
+    except Exception:
+        pass
+    return 1
 
 
 def score_geographic_fit(companies: list[dict]) -> dict[str, dict]:
@@ -189,88 +232,62 @@ def score_geographic_fit(companies: list[dict]) -> dict[str, dict]:
     Scores companies on Geographic / Strategic Country Fit (Criterion 3).
 
     Strategy:
-      1. Load the full country_risk_scores table from the DB.
-      2. Pass it to the LLM together with the company's countries of operation
-         (which may differ in naming — e.g. "Vietnam" vs "Viet Nam").
-      3. LLM returns the best-matching score for each country.
-      4. Python deterministically takes max() of those scores.
+      Parses the 4 macroeconomic indicators (Population, GDP Growth, Risk, CPI)
+      using regex thresholds into individual integer scores.
+      Averages these scores per country.
+      Identifies the country with the maximum average as the final score. 
     """
-    country_table = get_all_country_risk_scores()
-    table_str = "\n".join(f"  {c}: {s}" for c, s in country_table.items())
-    client = _get_client()
-
     results = {}
 
     for c in companies:
         name = c["company_name"]
         geo_view = c.get("macroeconomic_geo_view", []) or []
-        company_countries = [g.get("country", "") for g in geo_view if g.get("country")]
 
-        if not company_countries:
-            logger.warning("[SCORE] Geographic   '{}': No countries found in macroeconomic_geo_view → default 1", name)
+        if not geo_view:
+            logger.warning("[SCORE] Geographic   '{}': No countries in macroeconomic_geo_view → default 1", name)
             results[name] = {
                 "criterion": "Geographic / Strategic Fit",
-                "score": 1.0,
+                "score": 1,
                 "sub_scores": [],
-                "justification": "No countries of operation found.",
+                "justification": "No macroeconomic data available to score.",
             }
             continue
 
-        prompt = f"""You are a data matching assistant. 
-        
-The following is a reference table of country names and their risk scores:
-{table_str}
+        country_avgs = []
+        all_sub_scores = []
 
-The company operates in the following countries (which may use different spellings or abbreviations):
-{', '.join(company_countries)}
-
-Task: For each company country, find the best-matching entry in the reference table (use common sense for spelling variants like "Vietnam" vs "Viet Nam", "Democratic Republic of Congo" vs "Congo, Dem. Rep.", etc.).
-- If there is a clear match, return the matched entry name and its score.
-- If there is absolutely no match, return the matched_entry as "NOT_FOUND" and score as 1.0.
-
-Return a JSON object with a field "matched_countries" containing one entry per company country."""
-
-        try:
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=_GEO_SCHEMA,
-                    temperature=0,
-                ),
-            )
-            data = json.loads(response.text)
-        except Exception:
-            logger.error("[PEER_SCORING] Geo LLM match failed for '{}':\n{}", name, traceback.format_exc())
-            data = {"matched_countries": []}
-
-        sub_scores = []
-        scores = []
-
-        for entry in data.get("matched_countries", []):
-            c_country = entry.get("company_country", "")
-            matched = entry.get("matched_entry", "NOT_FOUND")
-            score = float(entry.get("score", 1.0))
-            # Clamp to valid range
-            score = max(1.0, min(5.0, score))
-            scores.append(score)
-            sub_scores.append({
-                "metric": c_country,
-                "value": f"{matched} → {score}",
-                "score": round(score),
+        for g in geo_view:
+            country_name = g.get("country", "Unknown")
+            pop_raw = g.get("population", "")
+            gdp_raw = g.get("gdp_growth_forecast", "")
+            risk_raw = g.get("country_risk_rating", "")
+            cpi_raw = g.get("corruption_perceptions_index_rank", "")
+            
+            p_score = _parse_population(pop_raw)
+            g_score = _parse_gdp_growth(gdp_raw)
+            r_score = _parse_risk(risk_raw)
+            c_score = _parse_cpi(cpi_raw)
+            
+            avg = round((p_score + g_score + r_score + c_score) / 4.0, 2)
+            country_avgs.append(avg)
+            
+            all_sub_scores.append({
+                "metric": country_name,
+                "value": f"Pop:{p_score} Growth:{g_score} Risk:{r_score} CPI:{c_score} → Avg {avg:.2f}",
+                "score": int(round(avg)),
             })
 
-        final_score = max(scores) if scores else 1.0
-        logger.info("[SCORE] Geographic   '{}': countries={}, matched_scores={} → max={}", name, company_countries, scores, final_score)
+        max_avg = max(country_avgs) if country_avgs else 1.0
+        final_score = int(round(max_avg))
+        
+        logger.info("[SCORE] Geographic   '{}': evaluated {} countries → max_avg={}", name, len(country_avgs), max_avg)
 
         results[name] = {
             "criterion": "Geographic / Strategic Fit",
             "score": final_score,
-            "sub_scores": sub_scores,
+            "sub_scores": all_sub_scores,
             "justification": (
-                f"Best country risk score: {final_score} "
-                f"(max of {len(scores)} countries matched against the reference table)."
+                f"Best country index ({max_avg:.2f} avg across 4 macroeconomic metrics)."
             ),
         }
 
@@ -356,6 +373,10 @@ def _build_slim_data_for_llm(companies: list[dict]) -> list[dict]:
             # Criterion 4: Product / Market Strategy Fit
             "products_and_services": c.get("products_and_services", ""),
             "countries_of_operation": c.get("countries_of_operation", []),
+            "currency": c.get("currency", "USDm"),
+            "pat": c.get("pat"),
+            "total_equity": c.get("total_equity"),
+            "gross_loan_portfolio": c.get("gross_loan_portfolio"),
             # Criterion 6: Quality & Depth of Management
             "management_team": c.get("management_team", []),
             # Criterion 7: Strategic Partners
@@ -406,10 +427,12 @@ def score_all_llm_criteria(companies: list[dict]) -> dict[str, list[dict]]:
         # Fallback: give everyone 3 on all criteria
         fallback = {}
         for c in companies:
-            fallback[c["company_name"]] = [
-                {"criterion": crit, "score": 3, "justification": "LLM scoring unavailable – default."}
-                for crit in llm_criteria
-            ]
+            fallback[c["company_name"]] = {
+                "criteria_scores": [
+                    {"criterion": crit, "score": 3, "justification": "LLM scoring unavailable – default."}
+                    for crit in llm_criteria
+                ]
+            }
         return fallback
 
     logger.debug("[PEER_SCORING] LLM response:\n{}", response.text)
@@ -420,14 +443,16 @@ def score_all_llm_criteria(companies: list[dict]) -> dict[str, list[dict]]:
         logger.error("[PEER_SCORING] Failed to parse LLM scoring response")
         fallback = {}
         for c in companies:
-            fallback[c["company_name"]] = [
-                {"criterion": crit, "score": 3, "justification": "Parse error."}
-                for crit in llm_criteria
-            ]
+            fallback[c["company_name"]] = {
+                "criteria_scores": [
+                    {"criterion": crit, "score": 3, "justification": "Parse error."}
+                    for crit in llm_criteria
+                ]
+            }
         return fallback
 
-    # Parse response: expect {company_scores: [{company_name, criteria: [{criterion, score, justification}]}]}
-    results: dict[str, list[dict]] = {c["company_name"]: [] for c in companies}
+    # Parse response: expect {company_scores: [{company_name, pat_usdm, total_equity_usdm, gross_loan_portfolio_usdm, criteria: [{criterion, score, justification}]}]}
+    results: dict[str, dict] = {c["company_name"]: {"criteria_scores": []} for c in companies}
 
     # Build a normalized-name → actual-name lookup to handle whitespace/case mismatches
     import re
@@ -448,8 +473,17 @@ def score_all_llm_criteria(companies: list[dict]) -> dict[str, list[dict]]:
             logger.warning("[PEER_SCORING] LLM returned unknown company '{}' (normalized: '{}'), skipping", raw_name, _norm(raw_name))
             continue
         logger.info("[PEER_SCORING] Matched LLM company '{}' → '{}'", raw_name, matched_name)
+        
+        # Save converted USDm values
+        results[matched_name] = {
+            "criteria_scores": [],
+            "pat_usdm": company_entry.get("pat_usdm"),
+            "total_equity_usdm": company_entry.get("total_equity_usdm"),
+            "gross_loan_portfolio_usdm": company_entry.get("gross_loan_portfolio_usdm"),
+        }
+        
         for crit_entry in company_entry.get("criteria", []):
-            results[matched_name].append({
+            results[matched_name]["criteria_scores"].append({
                 "criterion": crit_entry.get("criterion", ""),
                 "score": max(1, min(5, crit_entry.get("score", 3))),
                 "justification": crit_entry.get("justification", ""),
@@ -458,10 +492,14 @@ def score_all_llm_criteria(companies: list[dict]) -> dict[str, list[dict]]:
     # Ensure all companies have scores for all criteria
     for c in companies:
         name = c["company_name"]
-        scored_criteria = {s["criterion"] for s in results[name]}
+        
+        if name not in results or not isinstance(results[name], dict) or "criteria_scores" not in results[name]:
+            results[name] = {"criteria_scores": []}
+            
+        scored_criteria = {s["criterion"] for s in results[name]["criteria_scores"]}
         for crit in llm_criteria:
             if crit not in scored_criteria:
-                results[name].append({
+                results[name]["criteria_scores"].append({
                     "criterion": crit,
                     "score": 3,
                     "justification": "No LLM score returned.",
@@ -501,6 +539,26 @@ def compute_all_scores(companies: list[dict]) -> dict:
 
     all_scores: dict[str, list[dict]] = {c["company_name"]: [] for c in companies}
 
+    # ── LLM-evaluated criteria (single call) & Currency Conversion ──────────
+    llm_results = score_all_llm_criteria(companies)
+    for name, company_llm_data in llm_results.items():
+        if name in all_scores:
+            all_scores[name].extend(company_llm_data.get("criteria_scores", []))
+            
+    logger.info("[PEER_SCORING] ✓ LLM criteria scores computed")
+
+    # Update deterministic metrics to USDm based on LLM output
+    for c in companies:
+        name = c["company_name"]
+        if name in llm_results:
+            llm_c = llm_results[name]
+            if llm_c.get("pat_usdm") is not None:
+                c["pat"] = llm_c["pat_usdm"]
+            if llm_c.get("total_equity_usdm") is not None:
+                c["total_equity"] = llm_c["total_equity_usdm"]
+            if llm_c.get("gross_loan_portfolio_usdm") is not None:
+                c["gross_loan_portfolio"] = llm_c["gross_loan_portfolio_usdm"]
+
     # ── Deterministic criteria ──────────────────────────────────────────────
     profitability = score_profitability(companies)
     for name, result in profitability.items():
@@ -521,13 +579,6 @@ def compute_all_scores(companies: list[dict]) -> dict:
     for name, result in ease_of_exec.items():
         all_scores[name].append(result)
     logger.info("[PEER_SCORING] ✓ Ease of Execution scores computed")
-
-    # ── LLM-evaluated criteria (single call) ────────────────────────────────
-    llm_results = score_all_llm_criteria(companies)
-    for name, criterion_scores in llm_results.items():
-        if name in all_scores:
-            all_scores[name].extend(criterion_scores)
-    logger.info("[PEER_SCORING] ✓ LLM criteria scores computed")
 
     # Log the full score breakdown per company
     for name, scores in all_scores.items():

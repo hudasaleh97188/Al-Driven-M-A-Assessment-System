@@ -19,6 +19,9 @@ ALL_LLM_SCORING_SCHEMA = {
                 "type": "OBJECT",
                 "properties": {
                     "company_name": {"type": "STRING"},
+                    "pat_usdm": {"type": "NUMBER", "description": "PAT converted to USD millions"},
+                    "total_equity_usdm": {"type": "NUMBER", "description": "Total Equity converted to USD millions"},
+                    "gross_loan_portfolio_usdm": {"type": "NUMBER", "description": "Gross Loan Portfolio converted to USD millions"},
                     "criteria": {
                         "type": "ARRAY",
                         "items": {

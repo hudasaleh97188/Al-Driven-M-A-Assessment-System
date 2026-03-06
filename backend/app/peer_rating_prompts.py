@@ -13,7 +13,7 @@ import json
 # ---------------------------------------------------------------------------
 
 _PRODUCT_MARKET_RUBRIC = """
-**Criterion 4: Product / Market Strategy Fit**
+**Product / Market Strategy Fit**
 - 5: Clear focus on Lending (MSME, Retail, Corporate) and Microfinance.
 - 3: Deposits and payments products only.
 - 1: Niche products with limited scalability or heavy reliance on unsecured retail microloans.
@@ -21,7 +21,7 @@ Use fields: products_and_services, countries_of_operation.
 """
 
 _MANAGEMENT_QUALITY_RUBRIC = """
-**Criterion 6: Quality & Depth of Management**
+**Quality & Depth of Management**
 - 5: Deep institutional experience (e.g., former Top-tier Bank/Consulting execs).
 - 3: Solid domestic or regional experience.
 - 2: Limited track record or thin C-suite presence.
@@ -29,7 +29,7 @@ Use fields: management_team.
 """
 
 _STRATEGIC_PARTNERS_RUBRIC = """
-**Criterion 7: Strategic Partners**
+**Strategic Partners**
 - 5: Backed by major international DFIs (IFC, EIB, Proparco, Norfund).
 - 4: Backed by reliable regional players or local government.
 - 3: Local commercial banks, unknown entities, or no strategic partners.
@@ -37,7 +37,7 @@ Use fields: strategic_partners.
 """
 
 _IT_QUALITY_RUBRIC = """
-**Criterion 8: Quality of IT & Data**
+**Quality of IT & Data**
 - 5: Modern Core Banking Systems (Temenos, Mambu), Cloud-native, high digital adoption.
 - 3: Legacy systems with recent upgrades.
 - 1: Outdated legacy systems or lack of digital data.
@@ -45,7 +45,7 @@ Use fields: it_details.
 """
 
 _COMPETITOR_POSITIONING_RUBRIC = """
-**Criterion 9: Competitor Positioning**
+**Competitor Positioning**
 - 5: Top 1–3 in at least 2 markets.
 - 4: Top 1–3 in at least 1 market.
 - 3: Top 4–6 in at least 2 markets.
@@ -91,7 +91,10 @@ CRITERIA AND RUBRICS:
 COMPANIES DATA:
 {companies_summary}
 
-For EACH company, score ALL of these criteria:
+For EACH company, you must provide:
+1. Converted financial values in USD millions (pat_usdm, total_equity_usdm, gross_loan_portfolio_usdm)
+   - Read the company's "currency". If it is not USD/USDm, apply an approximate exchange rate conversion to USD millions. If already USDm, just pass the values through.
+2. Score ALL of these criteria:
 {criteria_list}
 
 For each criterion per company provide:

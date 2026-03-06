@@ -78,9 +78,9 @@ COMPANY_OVERVIEW_SCHEMA = {
                     "type": "INTEGER",
                     "description": "Total staff headcount at year-end",
                 },
-                "number_of_borrowers": {
+                "number_of_customers": {
                     "type": "INTEGER",
-                    "description": "Total number of active customers/borrowers",
+                    "description": "Total number of active customers",
                 },
             },
         },
@@ -227,6 +227,13 @@ STAGE2_SCHEMA = {
             "type": "ARRAY",
             "items": _FINANCIAL_DATA_ITEM,
         },
+        "is_publicly_listed": {
+            "type": "BOOLEAN",
+            "description": (
+                "True if the company is listed on a stock exchange, "
+                "False if it is privately held."
+            ),
+        },
         "quality_of_it": {
             "type": "OBJECT",
             "properties": {
@@ -238,7 +245,7 @@ STAGE2_SCHEMA = {
             },
         },
     },
-    "required": ["company_overview", "financial_data", "quality_of_it"],
+    "required": ["company_overview", "financial_data", "is_publicly_listed", "quality_of_it"],
 }
 
 # ---------------------------------------------------------------------------

@@ -72,9 +72,9 @@ export default function FinancialHealth({ data }: { data: AnalysisData }) {
                 <SectionBar color="bg-violet-500" title={`Profitability & Returns${latYear ? ` (${latYear})` : ''}`} />
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <MetricCard title="Profit Margin" value={lf?.profit_margin_percent} isRatio delta={ppDelta(lf?.profit_margin_percent, ff?.profit_margin_percent)} chartData={chartOf('profit_margin_percent')} baselineYear={firstYear} latestYear={latYear} />
-                    <MetricCard title="ROE" value={lf?.roe_percent} isRatio delta={ppDelta(lf?.roe_percent, ff?.roe_percent)} chartData={chartOf('roe_percent')} baselineYear={firstYear} latestYear={latYear} />
-                    <MetricCard title="ROA" value={lf?.roa_percent} isRatio delta={ppDelta(lf?.roa_percent, ff?.roa_percent)} chartData={chartOf('roa_percent')} baselineYear={firstYear} latestYear={latYear} />
                     <MetricCard title="Cost-to-Income" value={lf?.cost_to_income_ratio_percent} isRatio isNegativeGood delta={ppDelta(lf?.cost_to_income_ratio_percent, ff?.cost_to_income_ratio_percent)} chartData={chartOf('cost_to_income_ratio_percent')} baselineYear={firstYear} latestYear={latYear} />
+                    <MetricCard title="ROE" value={lf?.roe_percent} isRatio />
+                    <MetricCard title="ROA" value={lf?.roa_percent} isRatio />
                 </div>
             </section>
 

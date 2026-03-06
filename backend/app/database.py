@@ -49,11 +49,6 @@ CREATE TABLE IF NOT EXISTS peer_ratings (
     run_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
     result_json TEXT
 );
-
-CREATE TABLE IF NOT EXISTS country_risk_scores (
-    country TEXT PRIMARY KEY COLLATE NOCASE,
-    score REAL NOT NULL
-);
 """
 
 # ---------------------------------------------------------------------------
@@ -71,21 +66,6 @@ def init_db() -> None:
     """Create tables if they don't already exist."""
     with _get_conn() as conn:
         conn.executescript(SCHEMA_SQL)
-        
-        # Seed country risk scores
-        seed_data = [
-            ("India", 5.0), ("Viet Nam", 4.4), ("Tanzania", 4.4), ("Indonesia", 4.6),
-            ("Philippines", 4.0), ("Ethiopia", 4.2), ("Bangladesh", 4.0), ("South Africa", 4.0),
-            ("Thailand", 4.0), ("Egypt, Arab Rep.", 3.2), ("Turkiye", 3.6), ("Morocco", 3.8),
-            ("Pakistan", 3.6), ("Kenya", 3.8), ("Nigeria", 3.6), ("Algeria", 3.2),
-            ("Uganda", 3.4), ("Congo, Dem. Rep.", 3.0), ("Angola", 3.2), ("Myanmar", 2.4),
-            ("Zambia", 3.8), ("Serbia", 3.8), ("Slovenia", 3.8), ("Chile", 3.8),
-            ("Colombia", 3.8), ("Mexico", 3.8), ("Brazil", 4.0), ("Peru", 3.6)
-        ]
-        conn.executemany(
-            "INSERT OR IGNORE INTO country_risk_scores (country, score) VALUES (?, ?)",
-            seed_data
-        )
         conn.commit()
     logger.info("Database initialised at {}", str(DB_PATH))
 
@@ -247,20 +227,3 @@ def delete_company(company_name: str) -> bool:
         logger.warning("[DB] Company '{}' not found for deletion", company_name)
     return deleted
 
-def get_country_risk_score(country: str) -> float:
-    """Return the risk score for a country from the seeded database table, defaulting to 1.0."""
-    with _get_conn() as conn:
-        row = conn.execute(
-            "SELECT score FROM country_risk_scores WHERE country = ?", 
-            (country,)
-        ).fetchone()
-    if row:
-        return float(row["score"])
-    return 1.0
-
-
-def get_all_country_risk_scores() -> dict:
-    """Return all country risk scores as a dict {country_name: score}."""
-    with _get_conn() as conn:
-        rows = conn.execute("SELECT country, score FROM country_risk_scores ORDER BY score DESC").fetchall()
-    return {row["country"]: float(row["score"]) for row in rows}

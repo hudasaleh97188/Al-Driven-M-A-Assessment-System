@@ -56,7 +56,7 @@ export default function BusinessOverview({ data }: { data: AnalysisData }) {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                     <StatCard icon={<Building className="w-4 h-4" />} label="Branches" value={scale?.number_of_branches} />
                     <StatCard icon={<Users className="w-4 h-4" />} label="Employees" value={scale?.number_of_employees ? `${Math.floor(scale.number_of_employees / 10) * 10}+` : undefined} />
-                    <StatCard icon={<Contact className="w-4 h-4" />} label="Customers" value={scale?.number_of_borrowers} />
+                    <StatCard icon={<Contact className="w-4 h-4" />} label="Customers" value={scale?.number_of_customers} />
                     <StatCard icon={<Globe className="w-4 h-4" />} label="Countries" value={ov?.countries_of_operation?.length} />
                 </div>
 

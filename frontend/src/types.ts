@@ -18,7 +18,7 @@ export interface Shareholder {
 export interface OperationalScale {
     number_of_branches?: number;
     number_of_employees?: number;
-    number_of_borrowers?: number;
+    number_of_customers?: number;
 }
 
 export interface CompanyOverview {

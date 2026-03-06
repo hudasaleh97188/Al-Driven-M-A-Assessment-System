@@ -1,1 +1,0 @@
-["include_thoughts", "thinking_budget", "thinking_level"]

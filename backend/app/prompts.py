@@ -126,7 +126,11 @@ Task: Enrich the provided stage 1 extraction for "{company_name}".
    use Google Search to find and fill them (press releases, news, LinkedIn).
    Return the COMPLETE company_overview and financial_data arrays in your response, patching any holes.
 
-2. IT & DATA USAGE DUE DILIGENCE:
+2. LISTING STATUS:
+   Determine whether "{company_name}" is publicly listed on any stock exchange.
+   Return `is_publicly_listed` as true if publicly traded, false if privately held.
+
+3. IT & DATA USAGE DUE DILIGENCE:
    Use Google Search to research the company's technology stack:
    - Core banking systems in use
    - Digital channel adoption rates (mobile/internet banking %)
