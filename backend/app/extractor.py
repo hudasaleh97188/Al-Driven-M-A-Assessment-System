@@ -20,6 +20,7 @@ run_pipeline() orchestrates all three stages and merges outputs.
 
 import json
 import os
+import re
 import traceback
 from typing import List, Optional
 
@@ -52,6 +53,39 @@ def _parse_json_response(response_text: str, stage: str) -> dict:
         logger.error("[LLM_ERROR] Stage {} – Failed to parse JSON response: {}", stage, exc)
         logger.debug("[LLM_ERROR] Stage {} – Raw text that failed parsing:\n{}", stage, response_text)
         return {}
+
+
+def _is_semantically_equal(v1, v2) -> bool:
+    if type(v1) != type(v2):
+        if isinstance(v1, (int, float)) and isinstance(v2, (int, float)):
+             return v1 == v2
+        return False
+    if isinstance(v1, dict):
+        if len(v1) != len(v2): return False
+        for k in v1:
+            if k not in v2: return False
+            if not _is_semantically_equal(v1[k], v2[k]): return False
+        return True
+    if isinstance(v1, list):
+        if len(v1) != len(v2): return False
+        matched_v2 = set()
+        for i, item1 in enumerate(v1):
+            found_match = False
+            for j, item2 in enumerate(v2):
+                if j in matched_v2: continue
+                if _is_semantically_equal(item1, item2):
+                    matched_v2.add(j)
+                    found_match = True
+                    break
+            if not found_match:
+                return False
+        return True
+    if isinstance(v1, str):
+        # Normalize strings: lowercase, strip common trailing punctuation/spaces
+        s1 = re.sub(r'[\s\.\,]+$', '', v1.strip().lower())
+        s2 = re.sub(r'[\s\.\,]+$', '', v2.strip().lower())
+        return s1 == s2
+    return v1 == v2
 
 
 # ---------------------------------------------------------------------------
@@ -249,6 +283,11 @@ def run_pipeline(
     logger.info("[PIPELINE] Stage 1 complete – company='{}', currency='{}', years={}",
                 company_name, data.get("currency"), len(data.get("financial_data", [])))
 
+    data["data_sources"] = {
+        "company_overview": {},
+        "financial_data": {}
+    }
+
     # ── Stage 2: Web enrichment + IT quality ────────────────────────────────
     try:
         stage2 = enrich_with_web_and_it(data, company_name, project_id)
@@ -259,7 +298,11 @@ def run_pipeline(
                 data["company_overview"] = {}
             for k, v in s2_overview.items():
                 if v:  # Only overwrite if Stage 2 found something non-empty
-                    data["company_overview"][k] = v
+                    # If it's a list or dict that is not empty, or a truthy primitive
+                    s1_val = data["company_overview"].get(k)
+                    if not _is_semantically_equal(s1_val, v):
+                        data["company_overview"][k] = v
+                        data["data_sources"]["company_overview"][k] = "Web Search"
 
             # Merge financial_data by year:
             s2_fin = stage2.get("financial_data", [])
@@ -271,16 +314,27 @@ def run_pipeline(
                 year = s2_item.get("year")
                 if not year: continue
                 
+                if str(year) not in data["data_sources"]["financial_data"]:
+                    data["data_sources"]["financial_data"][str(year)] = {}
+                
                 if year in s1_fin_dict:
                     s1_health = s1_fin_dict[year].get("financial_health", {})
                     s2_health = s2_item.get("financial_health", {})
                     
                     for k, v in s2_health.items():
                         if v is not None:  # Overwrite missing numericals/strings
+                            s1_val = s1_health.get(k)
+                            if _is_semantically_equal(s1_val, v):
+                                continue
+                            if v == -1 and s1_val != -1:
+                                continue # Don't overwrite a valid number with missing (-1)
                             s1_health[k] = v
+                            data["data_sources"]["financial_data"][str(year)][k] = "Web Search"
                 else:
                     # If this is a new year added by Stage 2
                     s1_fin_dict[year] = s2_item
+                    for k in s2_item.get("financial_health", {}).keys():
+                         data["data_sources"]["financial_data"][str(year)][k] = "Web Search"
                     
             data["financial_data"] = list(s1_fin_dict.values())
 

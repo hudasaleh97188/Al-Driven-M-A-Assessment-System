@@ -2,6 +2,7 @@ import { TrendingUp, TrendingDown, AlertTriangle, Info } from 'lucide-react';
 import MetricCard from '../components/MetricCard';
 import RiskCard from '../components/RiskCard';
 import RatioBar from '../components/RatioBar';
+import { SourceBadge } from './BusinessOverview';
 import type { AnalysisData } from '../types';
 
 export default function FinancialHealth({ data }: { data: AnalysisData }) {
@@ -24,14 +25,20 @@ export default function FinancialHealth({ data }: { data: AnalysisData }) {
     const chartOf = (key: string) =>
         fd.map(d => ({ name: d.year, val: (d.financial_health as any)?.[key] ?? null }));
 
+    const getSourceBadge = (year: number | undefined, field: string) => {
+        if (!year) return <SourceBadge source="Files Upload" />;
+        const source = data.data_sources?.financial_data?.[year]?.[field] || "Files Upload";
+        return <SourceBadge source={source} />;
+    };
+
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
             {/* ──── Absolute Health ──── */}
             <section>
                 <SectionBar color="bg-blue-500" title={`Absolute Health${latYear ? ` (${latYear})` : ''}`} />
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                    <MetricCard title="Total Operating Revenue" value={lf?.total_operating_revenue} delta={pctDelta(lf?.total_operating_revenue, ff?.total_operating_revenue)} chartData={chartOf('total_operating_revenue')} baselineYear={firstYear} latestYear={latYear} />
-                    <MetricCard title="EBITDA" value={lf?.ebitda} delta={pctDelta(lf?.ebitda, ff?.ebitda)} chartData={chartOf('ebitda')} baselineYear={firstYear} latestYear={latYear} />
+                    <MetricCard title="Total Operating Revenue" value={lf?.total_operating_revenue} delta={pctDelta(lf?.total_operating_revenue, ff?.total_operating_revenue)} chartData={chartOf('total_operating_revenue')} baselineYear={firstYear} latestYear={latYear} badge={getSourceBadge(latYear, 'total_operating_revenue')} />
+                    <MetricCard title="EBITDA" value={lf?.ebitda} delta={pctDelta(lf?.ebitda, ff?.ebitda)} chartData={chartOf('ebitda')} baselineYear={firstYear} latestYear={latYear} badge={getSourceBadge(latYear, 'ebitda')} />
                     <MetricCard
                         title={
                             <span className="flex items-center gap-1.5 relative group cursor-help">
@@ -43,10 +50,11 @@ export default function FinancialHealth({ data }: { data: AnalysisData }) {
                                 </div>
                             </span>
                         }
-                        value={lf?.pat} delta={pctDelta(lf?.pat, ff?.pat)} chartData={chartOf('pat')} baselineYear={firstYear} latestYear={latYear} />
-                    <MetricCard title="Total Equity" value={lf?.total_equity} delta={pctDelta(lf?.total_equity, ff?.total_equity)} chartData={chartOf('total_equity')} baselineYear={firstYear} latestYear={latYear} />
+                        value={lf?.pat} delta={pctDelta(lf?.pat, ff?.pat)} chartData={chartOf('pat')} baselineYear={firstYear} latestYear={latYear} badge={getSourceBadge(latYear, 'pat')} />
+                    <MetricCard title="Total Equity" value={lf?.total_equity} delta={pctDelta(lf?.total_equity, ff?.total_equity)} chartData={chartOf('total_equity')} baselineYear={firstYear} latestYear={latYear} badge={getSourceBadge(latYear, 'total_equity')} />
                     {/* Credit Rating */}
-                    <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100/80 hover:shadow-md transition-shadow">
+                    <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100/80 hover:shadow-md transition-shadow relative">
+                        <div className="absolute top-4 right-4">{getSourceBadge(latYear, 'credit_rating')}</div>
                         <div className="flex items-center justify-between mb-2">
                             <h3 className="text-gray-400 uppercase tracking-wider text-[11px] font-semibold">Credit Rating</h3>
                             {latYear && <span className="text-[10px] text-gray-300 font-medium">{latYear}</span>}
@@ -71,10 +79,10 @@ export default function FinancialHealth({ data }: { data: AnalysisData }) {
             <section>
                 <SectionBar color="bg-violet-500" title={`Profitability & Returns${latYear ? ` (${latYear})` : ''}`} />
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <MetricCard title="Profit Margin" value={lf?.profit_margin_percent} isRatio delta={ppDelta(lf?.profit_margin_percent, ff?.profit_margin_percent)} chartData={chartOf('profit_margin_percent')} baselineYear={firstYear} latestYear={latYear} />
-                    <MetricCard title="Cost-to-Income" value={lf?.cost_to_income_ratio_percent} isRatio isNegativeGood delta={ppDelta(lf?.cost_to_income_ratio_percent, ff?.cost_to_income_ratio_percent)} chartData={chartOf('cost_to_income_ratio_percent')} baselineYear={firstYear} latestYear={latYear} />
-                    <MetricCard title="ROE" value={lf?.roe_percent} isRatio />
-                    <MetricCard title="ROA" value={lf?.roa_percent} isRatio />
+                    <MetricCard title="Profit Margin" value={lf?.profit_margin_percent} isRatio delta={ppDelta(lf?.profit_margin_percent, ff?.profit_margin_percent)} chartData={chartOf('profit_margin_percent')} baselineYear={firstYear} latestYear={latYear} badge={getSourceBadge(latYear, 'profit_margin_percent')} />
+                    <MetricCard title="Cost-to-Income" value={lf?.cost_to_income_ratio_percent} isRatio isNegativeGood delta={ppDelta(lf?.cost_to_income_ratio_percent, ff?.cost_to_income_ratio_percent)} chartData={chartOf('cost_to_income_ratio_percent')} baselineYear={firstYear} latestYear={latYear} badge={getSourceBadge(latYear, 'cost_to_income_ratio_percent')} />
+                    <MetricCard title="ROE" value={lf?.roe_percent} isRatio badge={getSourceBadge(latYear, 'roe_percent')} />
+                    <MetricCard title="ROA" value={lf?.roa_percent} isRatio badge={getSourceBadge(latYear, 'roa_percent')} />
                 </div>
             </section>
 
@@ -82,9 +90,9 @@ export default function FinancialHealth({ data }: { data: AnalysisData }) {
             <section>
                 <SectionBar color="bg-teal-500" title={`Asset Quality & Loan Book${latYear ? ` (${latYear})` : ''}`} />
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-                    <MetricCard title="Net Interest Margin" value={lf?.nim_percent} isRatio delta={ppDelta(lf?.nim_percent, ff?.nim_percent)} chartData={chartOf('nim_percent')} baselineYear={firstYear} latestYear={latYear} />
-                    <MetricCard title="Equity / GLP" value={lf?.equity_to_glp_percent} isRatio delta={ppDelta(lf?.equity_to_glp_percent, ff?.equity_to_glp_percent)} chartData={chartOf('equity_to_glp_percent')} baselineYear={firstYear} latestYear={latYear} />
-                    <RatioBar ratio={lf?.depositors_vs_borrowers_ratio ?? 0} />
+                    <MetricCard title="Net Interest Margin" value={lf?.nim_percent} isRatio delta={ppDelta(lf?.nim_percent, ff?.nim_percent)} chartData={chartOf('nim_percent')} baselineYear={firstYear} latestYear={latYear} badge={getSourceBadge(latYear, 'nim_percent')} />
+                    <MetricCard title="Equity / GLP" value={lf?.equity_to_glp_percent} isRatio delta={ppDelta(lf?.equity_to_glp_percent, ff?.equity_to_glp_percent)} chartData={chartOf('equity_to_glp_percent')} baselineYear={firstYear} latestYear={latYear} badge={getSourceBadge(latYear, 'equity_to_glp_percent')} />
+                    <RatioBar ratio={lf?.depositors_vs_borrowers_ratio ?? 0} badge={getSourceBadge(latYear, 'depositors_vs_borrowers_ratio')} />
                 </div>
 
                 {/* Loan Book Table */}
@@ -98,12 +106,12 @@ export default function FinancialHealth({ data }: { data: AnalysisData }) {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
-                                <LoanRow label="Gross Loan Portfolio" data={fd} field="gross_loan_portfolio" />
-                                <LoanRow label="Disbursals" data={fd} field="disbursals" />
-                                <LoanRow label="GNPA / NPL >90 Days (%)" data={fd} field="gnpa_percent" isRatio isNegativeGood />
-                                <LoanRow label="PAR 30 (%)" data={fd} field="par_30_percent" isRatio isNegativeGood />
-                                <LoanRow label="Provision Coverage (%)" data={fd} field="provision_coverage_percent" isRatio />
-                                <LoanRow label="Total Assets" data={fd} field="total_assets" />
+                                <LoanRow label="Gross Loan Portfolio" data={fd} field="gross_loan_portfolio" data_sources={data.data_sources} />
+                                <LoanRow label="Disbursals" data={fd} field="disbursals" data_sources={data.data_sources} />
+                                <LoanRow label="GNPA / NPL >90 Days (%)" data={fd} field="gnpa_percent" isRatio isNegativeGood data_sources={data.data_sources} />
+                                <LoanRow label="PAR 30 (%)" data={fd} field="par_30_percent" isRatio isNegativeGood data_sources={data.data_sources} />
+                                <LoanRow label="Provision Coverage (%)" data={fd} field="provision_coverage_percent" isRatio data_sources={data.data_sources} />
+                                <LoanRow label="Total Assets" data={fd} field="total_assets" data_sources={data.data_sources} />
                             </tbody>
                         </table>
                     </div>
@@ -167,12 +175,13 @@ function YoYBadge({ current, previous, isRatio = false, isNegativeGood = false }
     );
 }
 
-function LoanRow({ label, data, field, isRatio = false, isNegativeGood = false }: {
+function LoanRow({ label, data, field, isRatio = false, isNegativeGood = false, data_sources }: {
     label: string;
     data: any[];
     field: string;
     isRatio?: boolean;
     isNegativeGood?: boolean;
+    data_sources?: any;
 }) {
     return (
         <tr className="hover:bg-blue-50/30 transition-colors">
@@ -180,10 +189,16 @@ function LoanRow({ label, data, field, isRatio = false, isNegativeGood = false }
             {data.map((d, i) => {
                 const val = d.financial_health?.[field];
                 const prev = data[i - 1]?.financial_health?.[field];
+                const source = data_sources?.financial_data?.[d.year]?.[field];
                 return (
-                    <td key={d.year} className="p-4 text-right font-semibold text-gray-900">
-                        {val != null ? (isRatio ? `${val}%` : val.toLocaleString()) : '—'}
-                        {i > 0 && <YoYBadge current={val} previous={prev} isRatio={isRatio} isNegativeGood={isNegativeGood} />}
+                    <td key={d.year} className="p-4 text-right font-semibold text-gray-900 group">
+                        <div className="flex flex-col items-end gap-1">
+                            <div className="flex items-center gap-1.5 justify-end">
+                                {source === "Web Search" && <span className="opacity-0 group-hover:opacity-100 transition-opacity"><SourceBadge source="Web Search" /></span>}
+                                <span>{val != null ? (isRatio ? `${val}%` : val.toLocaleString()) : '—'}</span>
+                            </div>
+                            {i > 0 && <YoYBadge current={val} previous={prev} isRatio={isRatio} isNegativeGood={isNegativeGood} />}
+                        </div>
                     </td>
                 );
             })}

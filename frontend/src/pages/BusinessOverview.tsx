@@ -41,6 +41,11 @@ export default function BusinessOverview({ data }: { data: AnalysisData }) {
         color: COLORS[i % COLORS.length],
     }));
 
+    const getSourceBadge = (field: string, defaultValue = "Files Upload") => {
+        const source = data.data_sources?.company_overview?.[field] || defaultValue;
+        return <SourceBadge source={source} />;
+    };
+
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
             {/* ──── Product & Market Reach ──── */}
@@ -54,16 +59,17 @@ export default function BusinessOverview({ data }: { data: AnalysisData }) {
 
                 {/* Stats row */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                    <StatCard icon={<Building className="w-4 h-4" />} label="Branches" value={scale?.number_of_branches} />
-                    <StatCard icon={<Users className="w-4 h-4" />} label="Employees" value={scale?.number_of_employees ? `${Math.floor(scale.number_of_employees / 10) * 10}+` : undefined} />
-                    <StatCard icon={<Contact className="w-4 h-4" />} label="Customers" value={scale?.number_of_customers} />
-                    <StatCard icon={<Globe className="w-4 h-4" />} label="Countries" value={ov?.countries_of_operation?.length} />
+                    <StatCard icon={<Building className="w-4 h-4" />} label="Branches" value={scale?.number_of_branches} badge={getSourceBadge("operational_scale")} />
+                    <StatCard icon={<Users className="w-4 h-4" />} label="Employees" value={scale?.number_of_employees ? `${Math.floor(scale.number_of_employees / 10) * 10}+` : undefined} badge={getSourceBadge("operational_scale")} />
+                    <StatCard icon={<Contact className="w-4 h-4" />} label="Customers" value={scale?.number_of_customers} badge={getSourceBadge("operational_scale")} />
+                    <StatCard icon={<Globe className="w-4 h-4" />} label="Countries" value={ov?.countries_of_operation?.length} badge={getSourceBadge("countries_of_operation")} />
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                     {/* Countries */}
                     {ov?.countries_of_operation && ov.countries_of_operation.length > 0 && (
-                        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+                        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm relative">
+                            <div className="absolute top-4 right-4">{getSourceBadge("countries_of_operation")}</div>
                             <h4 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Countries of Operation</h4>
                             <div className="flex flex-wrap gap-2">
                                 {ov.countries_of_operation.map(c => (
@@ -77,7 +83,8 @@ export default function BusinessOverview({ data }: { data: AnalysisData }) {
 
                     {/* Revenue by Subsidiaries or Country */}
                     {subsidiaries.length > 0 && (
-                        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+                        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm relative">
+                            <div className="absolute top-4 right-4">{getSourceBadge("revenue_by_subsidiaries_or_country")}</div>
                             <h4 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Total Operating Revenue by Subsidiaries / Country ({data.currency})</h4>
                             <div className="h-64 mt-4">
                                 <ResponsiveContainer width="100%" height="100%">
@@ -111,7 +118,8 @@ export default function BusinessOverview({ data }: { data: AnalysisData }) {
                             {(ov?.management_team ?? []).map(member => {
                                 const detail = getManagementDetail(member.name);
                                 return (
-                                    <div key={member.name} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                                    <div key={member.name} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow relative">
+                                        <div className="absolute top-4 right-4">{getSourceBadge("management_team")}</div>
                                         <div className="flex items-center gap-3 mb-3">
                                             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-violet-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">
                                                 {member.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
@@ -139,7 +147,8 @@ export default function BusinessOverview({ data }: { data: AnalysisData }) {
 
                     {/* Shareholders */}
                     {shareholders.length > 0 && (
-                        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+                        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm relative">
+                            <div className="absolute top-4 right-4">{getSourceBadge("shareholder_structure")}</div>
                             <h4 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Shareholder Structure</h4>
                             <div className="h-40 mb-3">
                                 <ResponsiveContainer width="100%" height="100%">
@@ -174,7 +183,10 @@ export default function BusinessOverview({ data }: { data: AnalysisData }) {
             {/* ──── Strategic Partners ──── */}
             {partners.length > 0 && (
                 <section>
-                    <SectionHeader icon={<Shield className="w-4 h-4" />} title="Strategic Partners" color="emerald" />
+                    <div className="flex items-center justify-between mb-5">
+                        <SectionHeader icon={<Shield className="w-4 h-4" />} title="Strategic Partners" color="emerald" noMargin />
+                        {getSourceBadge("strategic_partners")}
+                    </div>
                     <div className="flex flex-wrap gap-3">
                         {partners.map(p => (
                             <span key={p} className="px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-700 shadow-sm hover:shadow-md transition-shadow">
@@ -223,6 +235,12 @@ export default function BusinessOverview({ data }: { data: AnalysisData }) {
                             <ITInfoCard title="Cybersecurity" items={it.cyber_incidents} />
                         )}
                     </div>
+
+                    {/* Hardcoded Sources */}
+                    <div className="mt-4 flex gap-2 items-center flex-wrap">
+                        <span className="text-xs text-slate-500 font-medium whitespace-nowrap">Sources:</span>
+                        <SourceBadge source="Web Search" label="Google Search, News, Vendor Press Releases" />
+                    </div>
                 </section>
             )}
 
@@ -235,6 +253,11 @@ export default function BusinessOverview({ data }: { data: AnalysisData }) {
                         {competitive.central_bank_sector_reports_summary && <CompetitiveCard title="Central Bank Reports" text={competitive.central_bank_sector_reports_summary} />}
                         {competitive.industry_studies_summary && <CompetitiveCard title="Industry Studies" text={competitive.industry_studies_summary} />}
                         {competitive.customer_growth_or_attrition_news && <CompetitiveCard title="Customer Growth" text={competitive.customer_growth_or_attrition_news} />}
+                    </div>
+
+                    <div className="mt-4 flex gap-2 items-center flex-wrap">
+                        <span className="text-xs text-slate-500 font-medium whitespace-nowrap">Sources:</span>
+                        <SourceBadge source="Web Search" label="Google Search, News, Central Bank Sector Reports, Industry Studies" />
                     </div>
                 </section>
             )}
@@ -279,6 +302,16 @@ export default function BusinessOverview({ data }: { data: AnalysisData }) {
                             </div>
                         </div>
                     </div>
+
+                    <div className="mt-4 flex gap-x-2 gap-y-1 items-center flex-wrap max-w-5xl">
+                        <span className="text-xs text-slate-500 font-medium whitespace-nowrap">Sources:</span>
+                        <SourceBadge source="Web Search" label="World Bank Open Data (Population)" />
+                        <SourceBadge source="Web Search" label="IMF World Economic Outlook (GDP, Inflation)" />
+                        <SourceBadge source="Web Search" label="Central Bank or BIS (Interest Rate)" />
+                        <SourceBadge source="Web Search" label="ILOSTAT (Unemployment)" />
+                        <SourceBadge source="Web Search" label="Atradius Country Risk Map (Risk Score)" />
+                        <SourceBadge source="Web Search" label="Transparency International (CPI)" />
+                    </div>
                 </section>
             )}
         </div>
@@ -287,7 +320,7 @@ export default function BusinessOverview({ data }: { data: AnalysisData }) {
 
 /* ── Sub-components ── */
 
-function SectionHeader({ icon, title, color }: { icon: React.ReactNode; title: string; color: string }) {
+function SectionHeader({ icon, title, color, noMargin = false }: { icon: React.ReactNode; title: string; color: string, noMargin?: boolean }) {
     const colorMap: Record<string, string> = {
         blue: 'bg-blue-100 text-blue-600',
         violet: 'bg-violet-100 text-violet-600',
@@ -298,16 +331,17 @@ function SectionHeader({ icon, title, color }: { icon: React.ReactNode; title: s
         teal: 'bg-teal-100 text-teal-600',
     };
     return (
-        <div className="flex items-center gap-2.5 mb-5">
+        <div className={`flex items-center gap-2.5 ${noMargin ? '' : 'mb-5'}`}>
             <div className={`w-7 h-7 rounded-lg ${colorMap[color] ?? colorMap.blue} flex items-center justify-center`}>{icon}</div>
             <h3 className="text-lg font-bold text-gray-900">{title}</h3>
         </div>
     );
 }
 
-function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value?: number | string }) {
+function StatCard({ icon, label, value, badge }: { icon: React.ReactNode; label: string; value?: number | string; badge?: React.ReactNode }) {
     return (
-        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm flex items-center gap-3">
+        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm flex items-center gap-3 relative">
+            {badge && <div className="absolute top-2 right-2">{badge}</div>}
             <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center flex-shrink-0">{icon}</div>
             <div>
                 <div className="text-xl font-bold text-gray-900">{value !== undefined ? (typeof value === 'number' ? value.toLocaleString() : value) : '—'}</div>
@@ -339,5 +373,26 @@ function CompetitiveCard({ title, text }: { title: string; text: string }) {
             <h4 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">{title}</h4>
             <p className="text-sm text-gray-600 leading-relaxed">{text}</p>
         </div>
+    );
+}
+
+export function SourceBadge({ source, label }: { source: string, label?: string }) {
+    const isWeb = source.toLowerCase().includes('web');
+
+    return (
+        <span
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium border
+                ${isWeb
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200/60 shadow-sm'
+                    : 'bg-blue-50/70 text-blue-700 border-blue-200/60'
+                }`}
+        >
+            {isWeb ? <Globe className="w-2.5 h-2.5" /> : (
+                <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+            )}
+            {label || source}
+        </span>
     );
 }

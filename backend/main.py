@@ -42,6 +42,7 @@ from app.database import (
 from app.extractor import run_pipeline
 from app.peer_rating import run_peer_rating
 from app.ratios import enrich_financial_data
+from app.converters.office_to_pdf import convert_to_pdf
 
 # ---------------------------------------------------------------------------
 # App factory
@@ -100,7 +101,10 @@ async def analyze_company(
             temp_path = os.path.join(temp_dir, file.filename)
             with open(temp_path, "wb") as f:
                 f.write(await file.read())
-            file_paths.append(temp_path)
+            
+            # Convert Excel/PPT/Word to PDF if necessary
+            pdf_path = convert_to_pdf(temp_path, temp_dir)
+            file_paths.append(pdf_path)
 
         # Create DB records
         company_id = upsert_company(company_name)
@@ -150,6 +154,7 @@ async def analyze_company(
             "macroeconomic_geo_view": result_data.get("macroeconomic_geo_view", []),
             "competitive_position": result_data.get("competitive_position", {}),
             "management_quality": result_data.get("management_quality", []),
+            "data_sources": result_data.get("data_sources", {}),
         }
         logger.info("[API] Analysis complete for '{}' – currency='{}', fin_data_years={}",
                      company_name, currency, len(response["financial_data"]))

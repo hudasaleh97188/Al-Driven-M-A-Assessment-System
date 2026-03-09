@@ -122,6 +122,10 @@ export interface AnalysisData {
     macroeconomic_geo_view?: GeoViewCountry[];
     competitive_position?: CompetitivePosition;
     management_quality?: ManagementQuality[];
+    data_sources?: {
+        company_overview: Record<string, string>;
+        financial_data: Record<string, Record<string, string>>;
+    };
 }
 
 export interface AnalysisListItem {

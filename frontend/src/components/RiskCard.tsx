@@ -1,4 +1,5 @@
 import { FileText, DollarSign } from 'lucide-react';
+import { SourceBadge } from '../pages/BusinessOverview';
 import type { AnomalyRisk } from '../types';
 
 const severityColor: Record<string, string> = {
@@ -12,7 +13,8 @@ export default function RiskCard({ risk }: { risk: AnomalyRisk }) {
     const badge = severityColor[risk.severity_level?.toLowerCase()] ?? 'bg-gray-100 text-gray-600 border-gray-200';
 
     return (
-        <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow duration-300">
+        <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow duration-300 relative">
+            <div className="absolute top-4 right-4"><SourceBadge source="Files Upload" /></div>
             {/* Header */}
             <div className="flex items-center gap-2.5 mb-3">
                 <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider border ${badge}`}>
