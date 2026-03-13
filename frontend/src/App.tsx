@@ -176,6 +176,7 @@ export default function App() {
                     <EditFinancials
                         statementId={editMode.statementId}
                         companyName={data.company_name}
+                        allStatements={data.financial_statements || []}
                         onBack={handleEditBack}
                     />
                 )}

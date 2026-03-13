@@ -1,8 +1,9 @@
-import { useState, useMemo } from 'react';
-import { TrendingUp, TrendingDown, Edit3, Briefcase, Activity, ShieldAlert, BarChart2, CreditCard, DollarSign, Percent } from 'lucide-react';
+import { useMemo } from 'react';
+import { TrendingUp, TrendingDown, Edit3, Briefcase, ShieldAlert, CreditCard } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { SourceBadge } from './BusinessOverview';
-import type { AnalysisData, FinancialLineItem } from '../types';
+import MetricCard from '../components/MetricCard';
+import type { AnalysisData, FinancialLineItem, FinancialStatement } from '../types';
 
 const PIE_COLORS = ['#0d9488', '#0ea5e9', '#f59e0b', '#8b5cf6', '#ef4444', '#22c55e', '#ec4899', '#6366f1'];
 
@@ -37,14 +38,12 @@ function pctBadge(val: number | null | undefined) {
 
 export default function FinancialHealth({ data, onEditClick }: Props) {
     const stmts = data.financial_statements || [];
-    const years = stmts.map(s => s.year).sort((a, b) => a - b);
-    const [selectedYear, setSelectedYear] = useState<number>(years[years.length - 1] || 0);
+    const years = useMemo(() => stmts.map((s: FinancialStatement) => s.year).sort((a, b) => a - b), [stmts]);
+    const latestYear = years[years.length - 1] || 0;
+    const prevYear = years.length > 1 ? years[years.length - 2] : null;
 
-    const stmt = useMemo(() => stmts.find(s => s.year === selectedYear), [stmts, selectedYear]);
-    const prevStmt = useMemo(() => {
-        const idx = years.indexOf(selectedYear);
-        return idx > 0 ? stmts.find(s => s.year === years[idx - 1]) : undefined;
-    }, [stmts, selectedYear, years]);
+    const stmt = useMemo(() => stmts.find((s: FinancialStatement) => s.year === latestYear), [stmts, latestYear]);
+    const prevStmt = useMemo(() => prevYear ? stmts.find((s: FinancialStatement) => s.year === prevYear) : undefined, [stmts, prevYear]);
 
     if (!stmt) {
         return <div className="text-center py-20 text-gray-400">No financial statement data available.</div>;
@@ -52,34 +51,32 @@ export default function FinancialHealth({ data, onEditClick }: Props) {
 
     const m = stmt.metrics || {};
     const r = stmt.computed_ratios || {};
-    const prevM = prevStmt?.metrics || {};
     const overallSource = stmt.line_items?.[0]?.data_source || stmt.metrics_detail?.[0]?.data_source || 'Files Upload';
 
-    const yoyChange = (key: string) => {
-        const cur = m[key];
-        const prev = prevM[key];
+    const yoyChange = (key: string, isRatio = false) => {
+        const cur = isRatio ? r[key] : m[key];
+        const prev = isRatio ? (prevStmt?.computed_ratios?.[key]) : (prevStmt?.metrics?.[key]);
         if (cur != null && prev != null && prev !== 0) return ((cur - prev) / Math.abs(prev)) * 100;
         return undefined;
     };
 
-    const assets = stmt.line_items.filter(i => i.category === 'Asset');
-    const liabilities = stmt.line_items.filter(i => i.category === 'Liability');
-    const equities = stmt.line_items.filter(i => i.category === 'Equity');
-    const incomeItems = stmt.line_items.filter(i => i.category === 'Income');
+    const getChartData = (key: string, isRatio = false) => {
+        return years.map((y: number) => {
+            const s = stmts.find((st: FinancialStatement) => st.year === y);
+            const val = isRatio ? s?.computed_ratios?.[key] : s?.metrics?.[key];
+            return { name: y, val: val || 0 };
+        });
+    };
+
+    const assets = stmt.line_items.filter((i: FinancialLineItem) => i.category === 'Asset');
+    const liabilities = stmt.line_items.filter((i: FinancialLineItem) => i.category === 'Liability');
+    const equities = stmt.line_items.filter((i: FinancialLineItem) => i.category === 'Equity');
+    const incomeItems = stmt.line_items.filter((i: FinancialLineItem) => i.category === 'Income');
 
     return (
         <div className="space-y-8">
             {/* ── Top Controls ── */}
             <div className="flex items-center justify-end gap-3 mb-6">
-                {years.length > 1 && (
-                    <select
-                        value={selectedYear}
-                        onChange={e => setSelectedYear(Number(e.target.value))}
-                        className="px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium bg-white"
-                    >
-                        {years.map(y => <option key={y} value={y}>{y}</option>)}
-                    </select>
-                )}
                 {onEditClick && (
                     <button
                         onClick={() => onEditClick(stmt.id)}
@@ -98,12 +95,12 @@ export default function FinancialHealth({ data, onEditClick }: Props) {
                     <SourceBadge source={overallSource} />
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                    <KPICard icon={<DollarSign size={18} />} label="Total Assets" value={fmt(m.total_assets)} change={yoyChange('total_assets')} />
-                    <KPICard icon={<DollarSign size={18} />} label="Total Liabilities" value={fmt(m.total_liabilities)} change={yoyChange('total_liabilities')} />
-                    <KPICard icon={<Briefcase size={18} />} label="Total Equity" value={fmt(m.total_equity)} change={yoyChange('total_equity')} />
-                    <KPICard icon={<Percent size={18} />} label="ROA" value={r.roa_percent != null ? `${r.roa_percent}%` : 'N/A'} />
-                    <KPICard icon={<Percent size={18} />} label="ROE" value={r.roe_percent != null ? `${r.roe_percent}%` : 'N/A'} />
-                    <KPICard icon={<Percent size={18} />} label="Deposits to Asset" value={r.deposits_to_assets_percent != null ? `${r.deposits_to_assets_percent}%` : 'N/A'} />
+                    <MetricCard title="Total Assets" value={m.total_assets} delta={yoyChange('total_assets')} chartData={getChartData('total_assets')} />
+                    <MetricCard title="Total Liabilities" value={m.total_liabilities} delta={yoyChange('total_liabilities')} chartData={getChartData('total_liabilities')} isNegativeGood />
+                    <MetricCard title="Total Equity" value={m.total_equity} delta={yoyChange('total_equity')} chartData={getChartData('total_equity')} />
+                    <MetricCard title="ROA" value={r.roa_percent} delta={yoyChange('roa_percent', true)} isRatio />
+                    <MetricCard title="ROE" value={r.roe_percent} delta={yoyChange('roe_percent', true)} isRatio />
+                    <MetricCard title="Deposits to Asset" value={r.deposits_to_assets_percent} delta={yoyChange('deposits_to_assets_percent', true)} isRatio />
                 </div>
             </section>
 
@@ -153,12 +150,12 @@ export default function FinancialHealth({ data, onEditClick }: Props) {
             <section>
                 <SectionHeader icon={<TrendingUp size={16} />} title="Profitability & Risk" color="emerald" />
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                    <KPICard icon={<DollarSign size={18} />} label="Op. Income" value={fmt(m.total_operating_revenue)} change={yoyChange('total_operating_revenue')} />
-                    <KPICard icon={<DollarSign size={18} />} label="Net Interest Inv." value={fmt(m.net_interests)} change={yoyChange('net_interests')} />
-                    <KPICard icon={<DollarSign size={18} />} label="Net Income" value={fmt(m.pat)} change={yoyChange('pat')} />
-                    <KPICard icon={<Percent size={18} />} label="Net Int. Margin" value={r.nim_percent != null ? `${r.nim_percent}%` : 'N/A'} />
-                    <KPICard icon={<BarChart2 size={18} />} label="Int. Coverage" value={r.interest_coverage_ratio != null ? `${r.interest_coverage_ratio}x` : 'N/A'} />
-                    <KPICard icon={<Percent size={18} />} label="Cost to Income" value={r.cost_to_income_ratio_percent != null ? `${r.cost_to_income_ratio_percent}%` : 'N/A'} />
+                    <MetricCard title="Op. Income" value={m.total_operating_revenue} delta={yoyChange('total_operating_revenue')} chartData={getChartData('total_operating_revenue')} />
+                    <MetricCard title="Net Interest Inv." value={m.net_interests} delta={yoyChange('net_interests')} chartData={getChartData('net_interests')} />
+                    <MetricCard title="Net Income" value={m.pat} delta={yoyChange('pat')} chartData={getChartData('pat')} />
+                    <MetricCard title="Net Int. Margin" value={r.nim_percent} delta={yoyChange('nim_percent', true)} isRatio />
+                    <MetricCard title="Int. Coverage" value={r.interest_coverage_ratio} delta={yoyChange('interest_coverage_ratio', true)} isRatio suffix="x" />
+                    <MetricCard title="Cost to Income" value={r.cost_to_income_ratio_percent} delta={yoyChange('cost_to_income_ratio_percent', true)} isRatio />
                 </div>
             </section>
 
@@ -170,16 +167,12 @@ export default function FinancialHealth({ data, onEditClick }: Props) {
                 <div className="lg:col-span-2 space-y-3">
                     <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-2">Key Ratios</h3>
                     <div className="grid grid-cols-2 gap-3">
-                        <RatioCard label="Loan-to-Deposit Ratio" value={r.loan_to_deposit_percent} suffix="%" />
-                        <RatioCard label="Capital Adequacy Ratio" value={r.capital_adequacy_percent} suffix="%" />
-                        <RatioCard label="Non-Performing Loan Ratio" value={r.npl_percent} suffix="%" />
-                        <RatioCard label="Liquidity Coverage Ratio" value={r.equity_to_glp_percent} suffix="%" />
-                        <RatioCard label="Provision Coverage Ratio" value={r.provision_coverage_percent} suffix="%" />
-                        <RatioCard label="Loans-to-Assets Ratio" value={r.loans_to_assets_percent} suffix="%" />
-                        <RatioCard label="Net Interest Margin" value={r.nim_percent} suffix="%" />
-                        <RatioCard label="Cost to Income Ratio" value={r.cost_to_income_ratio_percent} suffix="%" />
-                        <RatioCard label="Interest Coverage" value={r.interest_coverage_ratio} suffix="x" />
-                        <RatioCard label="Profit Margin" value={r.profit_margin_percent} suffix="%" />
+                        <MetricCard title="Loan-to-Deposit" value={r.loan_to_deposit_percent} delta={yoyChange('loan_to_deposit_percent', true)} isRatio />
+                        <MetricCard title="Capital Adequacy" value={r.capital_adequacy_percent} delta={yoyChange('capital_adequacy_percent', true)} isRatio />
+                        <MetricCard title="Non-Performing Loan" value={r.npl_percent} delta={yoyChange('npl_percent', true)} isRatio />
+                        <MetricCard title="Liquidity Coverage" value={r.equity_to_glp_percent} delta={yoyChange('equity_to_glp_percent', true)} isRatio />
+                        <MetricCard title="Provision Coverage" value={r.provision_coverage_percent} delta={yoyChange('provision_coverage_percent', true)} isRatio />
+                        <MetricCard title="Loans-to-Assets" value={r.loans_to_assets_percent} delta={yoyChange('loans_to_assets_percent', true)} isRatio />
                     </div>
                 </div>
             </div>
@@ -188,12 +181,12 @@ export default function FinancialHealth({ data, onEditClick }: Props) {
             <section>
                 <SectionHeader icon={<CreditCard size={16} />} title="Loan Book" color="violet" />
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                    <KPICard icon={<Briefcase size={18} />} label="Gross Loan Portfolio" value={fmt(m.gross_loan_portfolio)} change={yoyChange('gross_loan_portfolio')} />
-                    <KPICard icon={<ShieldAlert size={18} />} label="Credit Rating" value={m.credit_rating || 'N/A'} />
-                    <KPICard icon={<BarChart2 size={18} />} label="Deposits / Borrowings" value={m.debts_to_clients != null && m.debts_to_financial_institutions != null ? `${fmt(m.debts_to_clients)} / ${fmt(m.debts_to_financial_institutions)}` : 'N/A'} />
-                    <KPICard icon={<Percent size={18} />} label="PAR 30 (6%)" value={m.loans_with_arrears_over_30_days != null && m.gross_loan_portfolio ? `${((m.loans_with_arrears_over_30_days / m.gross_loan_portfolio) * 100).toFixed(1)}%` : 'N/A'} />
-                    <KPICard icon={<DollarSign size={18} />} label="Disbursals" value={fmt(m.disbursals)} change={yoyChange('disbursals')} />
-                    <KPICard icon={<Percent size={18} />} label="GLP / Equity" value={m.equity_to_glp_percent != null ? `${(100 / m.equity_to_glp_percent * 100).toFixed(1)}%` : (m.gross_loan_portfolio && m.total_equity ? `${(m.gross_loan_portfolio / m.total_equity).toFixed(1)}%` : 'N/A')} />
+                    <MetricCard title="Gross Loan Portfolio" value={m.gross_loan_portfolio} delta={yoyChange('gross_loan_portfolio')} chartData={getChartData('gross_loan_portfolio')} />
+                    <MetricCard title="Credit Rating" value={m.credit_rating || 'N/A'} hideChart />
+                    <MetricCard title="Deposits / Borrowings" value={m.debts_to_clients != null && m.debts_to_financial_institutions != null ? `${fmt(m.debts_to_clients)} / ${fmt(m.debts_to_financial_institutions)}` : 'N/A'} hideChart />
+                    <MetricCard title="PAR 30 (6%)" value={m.loans_with_arrears_over_30_days != null && m.gross_loan_portfolio ? `${((m.loans_with_arrears_over_30_days / m.gross_loan_portfolio) * 100).toFixed(1)}%` : 'N/A'} delta={yoyChange('loans_with_arrears_over_30_days')} chartData={getChartData('loans_with_arrears_over_30_days')} />
+                    <MetricCard title="Disbursals" value={m.disbursals} delta={yoyChange('disbursals')} chartData={getChartData('disbursals')} />
+                    <MetricCard title="GLP / Equity" value={m.equity_to_glp_percent != null ? `${(100 / m.equity_to_glp_percent * 100).toFixed(1)}%` : (m.gross_loan_portfolio && m.total_equity ? `${(m.gross_loan_portfolio / m.total_equity).toFixed(1)}%` : 'N/A')} isRatio />
                 </div>
             </section>
 
@@ -202,7 +195,7 @@ export default function FinancialHealth({ data, onEditClick }: Props) {
                 <div>
                     <SectionHeader icon={<ShieldAlert size={16} />} title="Identified Risks & Anomalies" color="rose" />
                     <div className="space-y-3">
-                        {data.anomalies_and_risks.map((risk, i) => (
+                        {data.anomalies_and_risks.map((risk: any, i: number) => (
                             <div key={i} className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
                                 <div className="flex items-start justify-between mb-2">
                                     <h4 className="font-semibold text-gray-900">{risk.category}</h4>
@@ -225,39 +218,6 @@ export default function FinancialHealth({ data, onEditClick }: Props) {
                                 </div>
                             </div>
                         ))}
-                    </div>
-                </div>
-            )}
-
-            {/* ── Edit History ── */}
-            {stmt.edit_history && stmt.edit_history.length > 0 && (
-                <div>
-                    <h3 className="text-lg font-bold text-gray-900 mb-4">Edit History</h3>
-                    <div className="bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="bg-gray-50 border-b border-gray-100">
-                                    <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase">Field</th>
-                                    <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase">Old Value</th>
-                                    <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase">New Value</th>
-                                    <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase">Comment</th>
-                                    <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase">User</th>
-                                    <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase">Date</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50">
-                                {stmt.edit_history.map(edit => (
-                                    <tr key={edit.id} className="hover:bg-gray-50/50">
-                                        <td className="px-4 py-2 text-gray-700 font-medium">{edit.metric_name || `Line Item #${edit.line_item_id}`}</td>
-                                        <td className="px-4 py-2 text-right text-gray-500">{fmtFull(edit.old_value)}</td>
-                                        <td className="px-4 py-2 text-right text-gray-900 font-semibold">{fmtFull(edit.new_value)}</td>
-                                        <td className="px-4 py-2 text-gray-600 max-w-xs truncate">{edit.comment}</td>
-                                        <td className="px-4 py-2 text-gray-500">{edit.username || 'N/A'}</td>
-                                        <td className="px-4 py-2 text-gray-400 text-xs">{edit.edited_at}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
                     </div>
                 </div>
             )}
@@ -285,22 +245,6 @@ function SectionHeader({ icon, title, color, noMargin = false }: { icon: React.R
     );
 }
 
-function KPICard({ label, value, change, icon }: { label: string; value: string | number; change?: number; icon?: React.ReactNode }) {
-    return (
-        <div className="bg-white rounded-2xl p-4 pb-8 border border-gray-100 shadow-sm flex items-center gap-3 relative">
-            {change !== undefined && (
-                <div className="absolute bottom-2 right-2 z-10">{pctBadge(change)}</div>
-            )}
-            <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center flex-shrink-0">
-                {icon || <Activity size={18} />}
-            </div>
-            <div>
-                <div className="text-xl font-bold text-gray-900 truncate max-w-[120px]">{value}</div>
-                <div className="text-[11px] text-gray-400 font-medium uppercase tracking-wider">{label}</div>
-            </div>
-        </div>
-    );
-}
 
 function LineItemTable({ title, items, sizeLabel }: { title: string; items: FinancialLineItem[]; sizeLabel: string }) {
     const nonTotal = items.filter(i => !i.is_total);
@@ -406,8 +350,8 @@ function IncomeTable({ items }: { items: FinancialLineItem[] }) {
 
 function CommonSizePie({ title, items }: { title: string; items: FinancialLineItem[] }) {
     const pieData = items
-        .filter(i => !i.is_total && i.value_reported && i.value_reported > 0)
-        .map(i => ({
+        .filter((i: FinancialLineItem) => !i.is_total && i.value_reported && i.value_reported > 0)
+        .map((i: FinancialLineItem) => ({
             name: i.item_name,
             value: i.value_reported || 0,
             pct: i.size_percent || 0,
@@ -454,13 +398,3 @@ function CommonSizePie({ title, items }: { title: string; items: FinancialLineIt
     );
 }
 
-function RatioCard({ label, value, suffix = '' }: { label: string; value?: number | null; suffix?: string }) {
-    return (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:shadow-md transition-shadow">
-            <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">{label}</div>
-            <div className="text-lg font-bold text-gray-900">
-                {value != null ? `${value}${suffix}` : <span className="text-gray-300">(Blank)</span>}
-            </div>
-        </div>
-    );
-}

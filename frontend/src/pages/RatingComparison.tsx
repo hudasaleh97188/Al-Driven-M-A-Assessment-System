@@ -547,58 +547,58 @@ function RatingTab({ data, compData, loadingComp }: { data: AnalysisData, compDa
                         </div>
 
                         {/* Balance Sheet KPIs */}
-                    <KPITable
-                        title="Balance Sheet KPIs"
-                        companies={comparisonCompanies}
-                        toUSD={toUSD}
-                        columns={[
-                            { key: 'total_assets', label: 'Total Assets (MUSD)', type: 'money' },
-                            { key: 'total_equity', label: 'Total Equity (MUSD)', type: 'money' },
-                            { key: 'total_liabilities', label: 'Total Liabilities (MUSD)', type: 'money' },
-                            { key: 'roa_percent', label: 'ROA %', type: 'ratio' },
-                            { key: 'roe_percent', label: 'ROE %', type: 'ratio' },
-                            { key: 'deposits_to_assets_percent', label: 'Deposits-to-Assets %', type: 'ratio' },
-                        ]}
-                    />
+                        <KPITable
+                            title="Balance Sheet KPIs"
+                            companies={comparisonCompanies}
+                            toUSD={toUSD}
+                            columns={[
+                                { key: 'total_assets', label: 'Total Assets (MUSD)', type: 'money' },
+                                { key: 'total_equity', label: 'Total Equity (MUSD)', type: 'money' },
+                                { key: 'total_liabilities', label: 'Total Liabilities (MUSD)', type: 'money' },
+                                { key: 'roa_percent', label: 'ROA %', type: 'ratio' },
+                                { key: 'roe_percent', label: 'ROE %', type: 'ratio' },
+                                { key: 'deposits_to_assets_percent', label: 'Deposits-to-Assets %', type: 'ratio' },
+                            ]}
+                        />
 
-                    {/* Profitability KPIs */}
-                    <KPITable
-                        title="Profitability KPIs"
-                        companies={comparisonCompanies}
-                        toUSD={toUSD}
-                        columns={[
-                            { key: 'total_operating_revenue', label: 'Total Operating Income (MUSD)', type: 'money' },
-                            { key: 'pat', label: 'Net Income (MUSD)', type: 'money' },
-                            { key: 'net_interests', label: 'Net Interest Income (MUSD)', type: 'money' },
-                            { key: 'nim_percent', label: 'Net Interest Margin %', type: 'ratio' },
-                            { key: 'interest_coverage_ratio', label: 'Interest Coverage Ratio', type: 'ratio' },
-                            { key: 'cost_to_income_ratio_percent', label: 'Cost-to-Income %', type: 'ratio', isGoodLow: true },
-                        ]}
-                    />
+                        {/* Profitability KPIs */}
+                        <KPITable
+                            title="Profitability KPIs"
+                            companies={comparisonCompanies}
+                            toUSD={toUSD}
+                            columns={[
+                                { key: 'total_operating_revenue', label: 'Total Operating Income (MUSD)', type: 'money' },
+                                { key: 'pat', label: 'Net Income (MUSD)', type: 'money' },
+                                { key: 'net_interests', label: 'Net Interest Income (MUSD)', type: 'money' },
+                                { key: 'nim_percent', label: 'Net Interest Margin %', type: 'ratio' },
+                                { key: 'interest_coverage_ratio', label: 'Interest Coverage Ratio', type: 'ratio' },
+                                { key: 'cost_to_income_ratio_percent', label: 'Cost-to-Income %', type: 'ratio', isGoodLow: true },
+                            ]}
+                        />
 
-                    {/* Loan KPIs */}
-                    <KPITable
-                        title="Loan KPIs"
-                        companies={comparisonCompanies}
-                        toUSD={toUSD}
-                        columns={[
-                            { key: 'loan_to_deposit_percent', label: 'LDR %', type: 'ratio' },
-                            { key: 'loans_to_assets_percent', label: 'LAR %', type: 'ratio' },
-                            { key: 'npl_percent', label: 'NPL Ratio %', type: 'ratio', isGoodLow: true },
-                        ]}
-                    />
+                        {/* Loan KPIs */}
+                        <KPITable
+                            title="Loan KPIs"
+                            companies={comparisonCompanies}
+                            toUSD={toUSD}
+                            columns={[
+                                { key: 'loan_to_deposit_percent', label: 'LDR %', type: 'ratio' },
+                                { key: 'loans_to_assets_percent', label: 'LAR %', type: 'ratio' },
+                                { key: 'npl_percent', label: 'NPL Ratio %', type: 'ratio', isGoodLow: true },
+                            ]}
+                        />
 
-                    {/* Risk KPIs */}
-                    <KPITable
-                        title="Risk KPIs"
-                        companies={comparisonCompanies}
-                        toUSD={toUSD}
-                        columns={[
-                            { key: 'capital_adequacy_percent', label: 'CAR %', type: 'ratio' },
-                            { key: 'equity_to_glp_percent', label: 'LCR %', type: 'ratio' },
-                            { key: 'provision_coverage_percent', label: 'PCR %', type: 'ratio' },
-                        ]}
-                    />
+                        {/* Risk KPIs */}
+                        <KPITable
+                            title="Risk KPIs"
+                            companies={comparisonCompanies}
+                            toUSD={toUSD}
+                            columns={[
+                                { key: 'capital_adequacy_percent', label: 'CAR %', type: 'ratio' },
+                                { key: 'equity_to_glp_percent', label: 'LCR %', type: 'ratio' },
+                                { key: 'provision_coverage_percent', label: 'PCR %', type: 'ratio' },
+                            ]}
+                        />
                     </div>
                 );
             })()}

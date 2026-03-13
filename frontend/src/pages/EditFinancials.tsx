@@ -6,6 +6,7 @@ import type { FinancialStatement, FinancialLineItem } from '../types';
 interface Props {
     statementId: number;
     companyName: string;
+    allStatements: FinancialStatement[];
     onBack: () => void;
 }
 
@@ -39,7 +40,8 @@ function fmtFull(v: number | null | undefined): string {
     return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
-export default function EditFinancials({ statementId, companyName, onBack }: Props) {
+export default function EditFinancials({ statementId, companyName, allStatements, onBack }: Props) {
+    const [currentStatementId, setCurrentStatementId] = useState(statementId);
     const [stmt, setStmt] = useState<FinancialStatement | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -52,10 +54,18 @@ export default function EditFinancials({ statementId, companyName, onBack }: Pro
 
     useEffect(() => {
         setLoading(true);
-        fetchFinancialStatement(statementId)
-            .then(s => { setStmt(s); setLoading(false); })
+        fetchFinancialStatement(currentStatementId)
+            .then(s => { 
+                setStmt(s); 
+                setLoading(false);
+                // Reset edits when switching years to avoid confusion
+                setEditValues({});
+                setEditComments({});
+                setGlobalComment('');
+                setError('');
+            })
             .catch(e => { setError(e.message); setLoading(false); });
-    }, [statementId]);
+    }, [currentStatementId]);
 
     const pendingEdits = useMemo(() => {
         if (!stmt) return [];
@@ -117,7 +127,7 @@ export default function EditFinancials({ statementId, companyName, onBack }: Pro
         setError('');
         try {
             await bulkEditFinancials(
-                statementId,
+                currentStatementId,
                 pendingEdits.map(e => ({
                     line_item_id: e.lineItemId || null,
                     metric_name: e.metricName || null,
@@ -155,7 +165,7 @@ export default function EditFinancials({ statementId, companyName, onBack }: Pro
     const incomeItems = stmt.line_items.filter(i => i.category === 'Income' && !i.is_total);
 
     return (
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-6xl mx-auto pb-20">
             {/* Header */}
             <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
                 <div className="flex items-center gap-4">
@@ -168,9 +178,24 @@ export default function EditFinancials({ statementId, companyName, onBack }: Pro
                     </button>
                     <div>
                         <h1 className="text-2xl font-extrabold text-gray-900">Edit Financial Metrics</h1>
-                        <p className="text-sm text-gray-500 mt-0.5">
-                            {companyName} — {stmt.year} ({stmt.currency || 'USD'})
-                        </p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-sm text-gray-500">{companyName} — </span>
+                            <select
+                                value={currentStatementId}
+                                onChange={(e) => {
+                                    if (pendingEdits.length > 0) {
+                                        if (!window.confirm('You have unsaved changes. Switching years will discard them. Continue?')) return;
+                                    }
+                                    setCurrentStatementId(Number(e.target.value));
+                                }}
+                                className="text-sm font-bold text-teal-600 bg-teal-50 border-none rounded-md px-2 py-0.5 focus:ring-2 focus:ring-teal-500 cursor-pointer"
+                            >
+                                {allStatements.sort((a, b) => b.year - a.year).map(s => (
+                                    <option key={s.id} value={s.id}>{s.year}</option>
+                                ))}
+                            </select>
+                            <span className="text-sm text-gray-500 ml-1">({stmt.currency || 'USD'})</span>
+                        </div>
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -292,8 +317,41 @@ export default function EditFinancials({ statementId, companyName, onBack }: Pro
                 </div>
             )}
 
+            {/* ── Edit History (Moved here) ── */}
+            {stmt.edit_history && stmt.edit_history.length > 0 && (
+                <div className="mt-12 border-t border-gray-100 pt-12">
+                    <h3 className="text-lg font-bold text-gray-900 mb-4">Edit History for {stmt.year}</h3>
+                    <div className="bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="bg-gray-50 border-b border-gray-100">
+                                    <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase font-sans">Field</th>
+                                    <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase font-sans">Old Value</th>
+                                    <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase font-sans">New Value</th>
+                                    <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase font-sans">Comment</th>
+                                    <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase font-sans">User</th>
+                                    <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase font-sans">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                                {stmt.edit_history.map(edit => (
+                                    <tr key={edit.id} className="hover:bg-gray-50/50">
+                                        <td className="px-4 py-2 text-gray-700 font-medium">{edit.metric_name || `Line Item #${edit.line_item_id}`}</td>
+                                        <td className="px-4 py-2 text-right text-gray-500 tabular-nums">{fmtFull(edit.old_value)}</td>
+                                        <td className="px-4 py-2 text-right text-gray-900 font-semibold tabular-nums">{fmtFull(edit.new_value)}</td>
+                                        <td className="px-4 py-2 text-gray-600 max-w-xs truncate">{edit.comment}</td>
+                                        <td className="px-4 py-2 text-gray-500">{edit.username || 'N/A'}</td>
+                                        <td className="px-4 py-2 text-gray-400 text-xs">{edit.edited_at}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
             {/* Bottom Save Button */}
-            <div className="sticky bottom-0 bg-white/90 backdrop-blur-sm border-t border-gray-100 py-4 -mx-6 px-6 flex justify-end gap-3">
+            <div className="sticky bottom-0 bg-white/90 backdrop-blur-sm border-t border-gray-100 py-4 -mx-6 px-6 flex justify-end gap-3 z-10 mt-8">
                 <button
                     onClick={onBack}
                     className="px-5 py-2.5 text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg text-sm font-semibold transition-colors"

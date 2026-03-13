@@ -13,11 +13,12 @@ interface MetricCardProps {
     suffix?: string;
     latestYear?: number;
     badge?: React.ReactNode;
+    hideChart?: boolean;
 }
 
 export default function MetricCard({
     title, value, delta, isRatio = false, isNegativeGood = false,
-    chartData, chartKey = 'val', baselineYear, suffix, badge
+    chartData, chartKey = 'val', baselineYear, suffix, badge, hideChart = false
 }: MetricCardProps) {
     const isPositiveDelta = typeof delta === 'number' && delta >= 0;
     const valueSuffix = suffix ?? (isRatio ? '%' : '');
@@ -53,7 +54,7 @@ export default function MetricCard({
                 )}
             </div>
 
-            {chartData && chartData.length > 0 && (
+            {!hideChart && !isRatio && chartData && chartData.length > 0 && (
                 <div className="h-14 w-full mt-3">
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={chartData} margin={{ bottom: 0 }}>
