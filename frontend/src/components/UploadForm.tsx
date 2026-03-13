@@ -37,17 +37,17 @@ export default function UploadForm({ onSubmit, onCancel, loading, error }: Uploa
             </div>
 
             <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-600 mb-2">Upload Annual Reports (PDF)</label>
+                <label className="block text-sm font-medium text-gray-600 mb-2">Upload Files</label>
                 <div className="relative border-2 border-dashed border-gray-200 rounded-xl p-8 text-center hover:border-blue-400 transition-colors bg-gray-50/30">
                     <input
                         type="file"
                         multiple
-                        accept=".pdf"
+                        accept=".pdf,.ppt,.pptx,.xls,.xlsx"
                         onChange={e => setFiles(e.target.files ? Array.from(e.target.files) : [])}
                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     />
                     <Upload className="mx-auto h-7 w-7 text-gray-300 mb-2" />
-                    <p className="text-sm text-gray-400">Drag & drop PDFs here or click to browse</p>
+                    <p className="text-sm text-gray-400">Drag & drop files here or click to browse</p>
                     {files.length > 0 && (
                         <div className="mt-3 text-xs text-blue-500 font-semibold">{files.length} file(s) selected</div>
                     )}

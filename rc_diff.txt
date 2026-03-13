@@ -1,0 +1,1173 @@
+﻿diff --git a/frontend/src/pages/RatingComparison.tsx b/frontend/src/pages/RatingComparison.tsx
+index 3b8a021..a9ee10c 100644
+--- a/frontend/src/pages/RatingComparison.tsx
++++ b/frontend/src/pages/RatingComparison.tsx
+@@ -1,11 +1,10 @@
+-import { useState, useEffect } from 'react';
++import React, { useState, useEffect } from 'react';
+ import {
+     Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+-    ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid,
+-    Line, ComposedChart, Legend, Cell, Bar,
++    ResponsiveContainer, Tooltip, Legend
+ } from 'recharts';
+ import { ShieldAlert, Play, Loader2, Trophy, Target, BarChart3, Settings2, UserPlus, X } from 'lucide-react';
+-import { runPeerRating, fetchPeerRating, fetchAnalyses } from '../api';
++import { runPeerRating, fetchPeerRating, fetchAnalyses, fetchAnalysis } from '../api';
+ import type { AnalysisData, PeerRatingResult, CriterionScore, AnalysisListItem } from '../types';
+ 
+ /* ÔöÇÔöÇ colour helpers (1ÔÇô5 scale) ÔöÇÔöÇ */
+@@ -17,16 +16,19 @@ const scoreGradient = (s: number) =>
+         s >= 3 ? 'from-amber-500 to-amber-400' :
+             'from-red-500 to-red-400';
+ 
+-const verdictFromScore = (s: number) =>
+-    s >= 4.0 ? 'Strong Acquisition Target' :
++const verdictFromScore = (s: number, tier1Avg: number) => {
++    if (tier1Avg <= 3.0) return 'Not Worth Progressing';
++    return s >= 4.0 ? 'Strong Acquisition Target' :
+         s >= 3.25 ? 'Conditional Acquisition Target' :
+             s >= 2.5 ? 'Moderate Acquisition Target' :
+                 'Weak Acquisition Target';
++};
+ 
+ const verdictColor = (v: string) =>
+-    v.includes('Strong') ? 'text-emerald-600' :
+-        v.includes('Conditional') ? 'text-amber-600' :
+-            v.includes('Moderate') ? 'text-blue-600' : 'text-red-600';
++    v === 'Not Worth Progressing' ? 'text-red-700 bg-red-100 rounded px-3 py-1 font-extrabold' :
++        v.includes('Strong') ? 'text-emerald-600' :
++            v.includes('Conditional') ? 'text-amber-600' :
++                v.includes('Moderate') ? 'text-blue-600' : 'text-red-600';
+ 
+ const CRITERIA_ORDER = [
+     'Contribution to Profitability',
+@@ -52,39 +54,81 @@ const CRITERIA_SHORT = [
+     'Competitor',
+ ];
+ 
++const TIERS = [
++    {
++        name: 'Tier 1: Strategic Fit',
++        criteria: [
++            'Contribution to Profitability',
++            'Size of Transaction',
++            'Geographic / Strategic Fit',
++            'Product / Market Strategy Fit',
++        ]
++    },
++    {
++        name: 'Tier 2: Execution Complexity & Transactional Risk',
++        criteria: [
++            'Ease of Execution',
++            'Quality & Depth of Management',
++            'Strategic Partners',
++        ]
++    },
++    {
++        name: 'Tier 3: Platform Quality',
++        criteria: [
++            'Quality of IT & Data',
++            'Competitor Positioning',
++        ]
++    }
++];
++
+ const COMPANY_COLORS = [
+     '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981',
+     '#06b6d4', '#ef4444', '#6366f1', '#14b8a6', '#f97316',
+ ];
+ 
+-/* Default equal weights (sum to 100) */
+-const DEFAULT_WEIGHTS: { [key: string]: number } = {};
+-CRITERIA_ORDER.forEach(c => { DEFAULT_WEIGHTS[c] = Math.round(100 / CRITERIA_ORDER.length); });
+-const totalDefault = Object.values(DEFAULT_WEIGHTS).reduce((a, b) => a + b, 0);
+-DEFAULT_WEIGHTS[CRITERIA_ORDER[CRITERIA_ORDER.length - 1]] += 100 - totalDefault;
++const DEFAULT_WEIGHTS: { [key: string]: number } = {
++    'Contribution to Profitability': 1.1,
++    'Size of Transaction': 1.1,
++    'Geographic / Strategic Fit': 1.1,
++    'Product / Market Strategy Fit': 1.1,
++    'Ease of Execution': 1.0,
++    'Quality & Depth of Management': 0.9,
++    'Strategic Partners': 0.9,
++    'Quality of IT & Data': 0.9,
++    'Competitor Positioning': 0.9,
++};
++
++// Simple mock for USD standardization multiplier. In real app, exchange rates apply based on reported_currency.
++const getUsdMultiplier = (currency?: string) => {
++    if (currency === 'EGP') return 0.021;
++    if (currency === 'AED') return 0.27;
++    return 1;
++};
+ 
+ interface Props {
+     data: AnalysisData;
+ }
+ 
+ export default function RatingComparison({ data }: Props) {
++    
+     const [peerData, setPeerData] = useState<PeerRatingResult | null>(null);
+-    const [loading, setLoading] = useState(false);      // explicit re-run spinner
+-    const [initializing, setInitializing] = useState(true); // silent first-load
+-    const [visible, setVisible] = useState(false);          // drives fade-in
+-    const [animated, setAnimated] = useState(false);        // drives bar/chart animations
++    const [peerFullData, setPeerFullData] = useState<Record<string, AnalysisData>>({});
++    
++    const [loading, setLoading] = useState(false);
++    const [initializing, setInitializing] = useState(true); 
++    const [visible, setVisible] = useState(false);          
++    const [animated, setAnimated] = useState(false);        
+     const [error, setError] = useState('');
+     const [loaded, setLoaded] = useState(false);
+     const [weights, setWeights] = useState<{ [key: string]: number }>({ ...DEFAULT_WEIGHTS });
+     const [editingWeights, setEditingWeights] = useState(false);
+     const [draftWeights, setDraftWeights] = useState<{ [key: string]: number }>({ ...DEFAULT_WEIGHTS });
+ 
+-    // Peer selection state
++    const [expandedTiers, setExpandedTiers] = useState<Set<string>>(new Set(TIERS.map(t => t.name)));
+     const [availableCompanies, setAvailableCompanies] = useState<AnalysisListItem[]>([]);
+     const [selectedPeers, setSelectedPeers] = useState<string[]>([]);
+     const [peerDropdownOpen, setPeerDropdownOpen] = useState(false);
+ 
+-    // Load list of analyzed companies for peer selection
+     useEffect(() => {
+         fetchAnalyses()
+             .then(list => setAvailableCompanies(list.filter(c => c.company_name !== data.company_name)))
+@@ -97,6 +141,16 @@ export default function RatingComparison({ data }: Props) {
+         try {
+             const result = await runPeerRating(data.company_name, peers);
+             setPeerData(result);
++            
++            // Fetch full financial data for newly added peers in background
++            const fetches = peers.map(async (p) => {
++                if (!peerFullData[p]) {
++                    const fd = await fetchAnalysis(p);
++                    setPeerFullData(prev => ({ ...prev, [p]: fd }));
++                }
++            });
++            await Promise.all(fetches);
++
+         } catch (e: any) {
+             setError(e.message);
+         } finally {
+@@ -106,24 +160,34 @@ export default function RatingComparison({ data }: Props) {
+     };
+ 
+     const handleLoad = async () => {
+-        // Silent background fetch ÔÇö does NOT trigger the full-page spinner
+         setError('');
+         try {
+             const result = await fetchPeerRating(data.company_name);
+             setPeerData(result);
+-            // Restore selected peers from cached data
+             if (result?.companies) {
+                 const peerNames = result.companies
+                     .map(c => c.company_name)
+                     .filter(n => n !== data.company_name);
+                 setSelectedPeers(peerNames);
++                
++                // Fetch full data for these initial peers
++                const fetches = peerNames.map(async (p) => {
++                    if (!peerFullData[p]) {
++                        try {
++                            const fd = await fetchAnalysis(p);
++                            setPeerFullData(prev => ({ ...prev, [p]: fd }));
++                        } catch (e) {
++                            console.error(`Failed loading full data for peer ${p}`, e);
++                        }
++                    }
++                });
++                await Promise.all(fetches);
+             }
+             setLoaded(true);
+         } catch {
+             setLoaded(true);
+         } finally {
+             setInitializing(false);
+-            // Small delay so the fade-in animation is visible
+             requestAnimationFrame(() => {
+                 setVisible(true);
+                 setTimeout(() => setAnimated(true), 50);
+@@ -131,12 +195,8 @@ export default function RatingComparison({ data }: Props) {
+         }
+     };
+ 
+-    // Try loading cached data on first render
+     useEffect(() => {
+-        if (!loaded) {
+-            handleLoad();
+-        }
+-        // eslint-disable-next-line react-hooks/exhaustive-deps
++        if (!loaded) handleLoad();
+     }, []);
+ 
+     const addPeer = async (name: string) => {
+@@ -144,8 +204,8 @@ export default function RatingComparison({ data }: Props) {
+             setSelectedPeers(prev => [...prev, name]);
+             setPeerDropdownOpen(false);
+ 
+-            // Instantly fetch and merge peer's database score
+             try {
++                // Add to rating scores
+                 const peerResult = await fetchPeerRating(name);
+                 if (peerResult && peerResult.companies?.length > 0) {
+                     setPeerData((prev: any) => {
+@@ -163,8 +223,13 @@ export default function RatingComparison({ data }: Props) {
+                         };
+                     });
+                 }
++                
++                // Add to full financial data
++                const fd = await fetchAnalysis(name);
++                setPeerFullData(prev => ({ ...prev, [name]: fd }));
++
+             } catch (err) {
+-                console.error("Failed to auto-fetch peer rating for", name, err);
++                console.error("Failed to auto-fetch peer", name, err);
+                 setSelectedPeers(prev => prev.filter(n => n !== name)); // rollback
+             }
+         }
+@@ -172,44 +237,27 @@ export default function RatingComparison({ data }: Props) {
+ 
+     const removePeer = (name: string) => {
+         setSelectedPeers(prev => prev.filter(n => n !== name));
+-
+         setPeerData((prev: any) => {
+             if (!prev) return prev;
+-
+             const newCompanies = prev.companies.filter((c: any) => c.company_name !== name);
+             const newScores = { ...prev.scores };
+             delete newScores[name];
+-
+             const newOverallScores = { ...prev.overall_scores };
+             delete newOverallScores[name];
+-
+             const newSummaries = { ...prev.summaries };
+             delete newSummaries[name];
+-
+             return {
+-                ...prev,
+-                companies: newCompanies,
+-                scores: newScores,
+-                overall_scores: newOverallScores,
+-                summaries: newSummaries
++                ...prev, companies: newCompanies, scores: newScores,
++                overall_scores: newOverallScores, summaries: newSummaries
+             };
+         });
+     };
+ 
+-    /* ÔöÇÔöÇ Weight helpers ÔöÇÔöÇ */
+-    const weightsTotal = Object.values(draftWeights).reduce((a, b) => a + b, 0);
+-    const weightsValid = weightsTotal === 100;
+-
+-    const applyWeights = () => {
+-        setWeights({ ...draftWeights });
+-        setEditingWeights(false);
+-    };
++    const weightsTotal = Math.round(Object.values(draftWeights).reduce((a, b) => a + b, 0) * 10) / 10;
++    const weightsValid = weightsTotal === 9;
+ 
+-    const resetWeights = () => {
+-        setDraftWeights({ ...DEFAULT_WEIGHTS });
+-        setWeights({ ...DEFAULT_WEIGHTS });
+-        setEditingWeights(false);
+-    };
++    const applyWeights = () => { setWeights({ ...draftWeights }); setEditingWeights(false); };
++    const resetWeights = () => { setDraftWeights({ ...DEFAULT_WEIGHTS }); setWeights({ ...DEFAULT_WEIGHTS }); setEditingWeights(false); };
+ 
+     const computeWeightedScore = (company: string): number => {
+         const cScores = peerData?.scores[company] ?? [];
+@@ -224,13 +272,43 @@ export default function RatingComparison({ data }: Props) {
+         return totalWeight > 0 ? totalWeighted / totalWeight : 0;
+     };
+ 
+-    /* ÔöÇÔöÇ Empty state (no cached rating found after silent load) ÔöÇÔöÇ */
++    const computeTierAverage = (company: string, tierIndex: number): number => {
++        const cScores = peerData?.scores[company] ?? [];
++        const criteria = TIERS[tierIndex].criteria;
++        let total = 0;
++        for (const crit of criteria) {
++            total += cScores.find(sc => sc.criterion === crit)?.score ?? 0;
++        }
++        return criteria.length > 0 ? total / criteria.length : 0;
++    };
++
++    const computeTierWeightedAverage = (company: string, tierIndex: number): number => {
++        const cScores = peerData?.scores[company] ?? [];
++        const criteria = TIERS[tierIndex].criteria;
++        let totalWeighted = 0;
++        let totalWeight = 0;
++        for (const crit of criteria) {
++            const w = weights[crit] ?? 0;
++            const s = cScores.find(sc => sc.criterion === crit)?.score ?? 0;
++            totalWeighted += s * w;
++            totalWeight += w;
++        }
++        return totalWeight > 0 ? totalWeighted / totalWeight : 0;
++    };
++
++    const toggleTier = (tierName: string) => {
++        setExpandedTiers(prev => {
++            const next = new Set(prev);
++            if (next.has(tierName)) next.delete(tierName);
++            else next.add(tierName);
++            return next;
++        });
++    };
++
+     if (!initializing && !peerData && !loading) {
+         return (
+             <div className="animate-in fade-in duration-500">
+-                {error && (
+-                    <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-xl text-sm border border-red-100">{error}</div>
+-                )}
++                {error && <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-xl text-sm border border-red-100">{error}</div>}
+                 <div className="flex flex-col items-center justify-center min-h-[400px] text-center border border-dashed border-gray-200 rounded-2xl bg-gray-50/50 p-8">
+                     <ShieldAlert className="w-12 h-12 text-gray-300 mb-4" />
+                     <h2 className="text-xl font-bold text-gray-900 mb-2">M&A Rating Not Available</h2>
+@@ -238,17 +316,11 @@ export default function RatingComparison({ data }: Props) {
+                         Run the rating to score {data.company_name} on {CRITERIA_ORDER.length} M&A attractiveness criteria.
+                         You can optionally add peer companies for comparison.
+                     </p>
+-
+-                    {/* Peer selection before first run */}
+                     <PeerSelector
+-                        availableCompanies={availableCompanies}
+-                        selectedPeers={selectedPeers}
+-                        peerDropdownOpen={peerDropdownOpen}
+-                        setPeerDropdownOpen={setPeerDropdownOpen}
+-                        addPeer={addPeer}
+-                        removePeer={removePeer}
++                        availableCompanies={availableCompanies} selectedPeers={selectedPeers}
++                        peerDropdownOpen={peerDropdownOpen} setPeerDropdownOpen={setPeerDropdownOpen}
++                        addPeer={addPeer} removePeer={removePeer}
+                     />
+-
+                     <button
+                         onClick={() => handleRun()}
+                         disabled={loading}
+@@ -262,7 +334,6 @@ export default function RatingComparison({ data }: Props) {
+         );
+     }
+ 
+-    /* ÔöÇÔöÇ Full-page loading (only when explicitly running a rating) ÔöÇÔöÇ */
+     if (loading) {
+         return (
+             <div className="animate-in fade-in duration-500 flex flex-col items-center justify-center min-h-[400px] text-center p-8">
+@@ -275,318 +346,436 @@ export default function RatingComparison({ data }: Props) {
+         );
+     }
+ 
+-    /* ÔöÇÔöÇ Still initializing silently ÔÇö return null (no flash) ÔöÇÔöÇ */
+     if (initializing || !peerData) return null;
+ 
+-    /* ÔöÇÔöÇ Data prep ÔöÇÔöÇ */
+     const targetName = peerData.target_company;
+     const targetOverall = computeWeightedScore(targetName);
+-    const targetVerdict = verdictFromScore(targetOverall);
++    const targetTier1Avg = computeTierAverage(targetName, 0);
++    const targetVerdict = verdictFromScore(targetOverall, targetTier1Avg);
+     const targetSummary = peerData.summaries[targetName] ?? '';
+     const companies = peerData.companies ?? [];
+     const companyNames = companies.map(c => c.company_name);
+     const hasPeers = companyNames.length > 1;
+ 
+-    const getScore = (company: string, criterion: string): number => {
+-        const cScores = peerData.scores[company] ?? [];
+-        return cScores.find(s => s.criterion === criterion)?.score ?? 0;
+-    };
+-
+     const getScoreDetail = (company: string, criterion: string): CriterionScore | undefined => {
+         return (peerData.scores[company] ?? []).find(s => s.criterion === criterion);
+     };
+ 
+-    // Radar data: target vs peer average
+     const radarData = CRITERIA_ORDER.map((c, i) => {
+-        const targetScore = getScore(targetName, c);
+-        const entry: any = {
+-            criterion: CRITERIA_SHORT[i],
+-            [targetName]: targetScore,
+-        };
++        const targetScore = getScoreDetail(targetName, c)?.score ?? 0;
++        const entry: any = { criterion: CRITERIA_SHORT[i], [targetName]: targetScore };
+         if (hasPeers) {
+-            const peerScores = companyNames
+-                .filter(n => n !== targetName)
+-                .map(n => getScore(n, c));
+-            entry['Peer Average'] = peerScores.length > 0
+-                ? Math.round((peerScores.reduce((a, b) => a + b, 0) / peerScores.length) * 10) / 10
+-                : 0;
++            const peerScores = companyNames.filter(n => n !== targetName).map(n => getScoreDetail(n, c)?.score ?? 0);
++            entry['Peer Average'] = peerScores.length > 0 ? Math.round((peerScores.reduce((a, b) => a + b, 0) / peerScores.length) * 10) / 10 : 0;
+         }
+         return entry;
+     });
+ 
+     return (
+         <div className={`space-y-8 transition-opacity duration-500 ${visible ? 'opacity-100' : 'opacity-0'}`}>
+-            {/* ÔöÇÔöÇ Action bar ÔöÇÔöÇ */}
+-            <div className="flex flex-wrap items-center justify-between gap-3">
+-                {/* Peer selection */}
+-                <PeerSelector
+-                    availableCompanies={availableCompanies}
+-                    selectedPeers={selectedPeers}
+-                    peerDropdownOpen={peerDropdownOpen}
+-                    setPeerDropdownOpen={setPeerDropdownOpen}
+-                    addPeer={addPeer}
+-                    removePeer={removePeer}
+-                />
+-
+-                <div className="flex gap-3">
++            {/* Action Bar */}
++            <div className="flex items-center justify-between gap-4 mb-8 bg-white p-3 rounded-xl shadow-sm border border-gray-100">
++                <div className="flex items-center gap-2">
++                    <h2 className="text-lg font-bold text-gray-800">M&A Assessment & Comparison</h2>
++                </div>
++                <div className="flex items-center gap-3">
++                    <PeerSelector
++                        availableCompanies={availableCompanies} selectedPeers={selectedPeers}
++                        peerDropdownOpen={peerDropdownOpen} setPeerDropdownOpen={setPeerDropdownOpen}
++                        addPeer={addPeer} removePeer={removePeer}
++                    />
+                     <button
+                         onClick={() => { setDraftWeights({ ...weights }); setEditingWeights(!editingWeights); }}
+-                        className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-semibold text-gray-600 transition-colors"
++                        className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-semibold text-slate-600 transition-colors"
+                     >
+-                        <Settings2 className="w-3 h-3" />
++                        <Settings2 className="w-3.5 h-3.5" />
+                         {editingWeights ? 'Cancel Weights' : 'Edit Weights'}
+                     </button>
+                 </div>
+             </div>
+ 
+-            {/* ÔöÇÔöÇ Weights Editor ÔöÇÔöÇ */}
+-            {editingWeights && (
+-                <div className="bg-white rounded-2xl border border-blue-100 shadow-sm p-6">
+-                    <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-[0.15em] mb-4 flex items-center gap-2">
+-                        <Settings2 className="w-4 h-4" />
+-                        Criteria Weights (must sum to 100)
+-                    </h3>
+-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+-                        {CRITERIA_ORDER.map(criterion => (
+-                            <div key={criterion} className="flex flex-col gap-1">
+-                                <label className="text-[11px] font-medium text-gray-600 truncate" title={criterion}>
+-                                    {criterion}
+-                                </label>
+-                                <input
+-                                    type="number"
+-                                    min={0}
+-                                    max={100}
+-                                    value={draftWeights[criterion] ?? 0}
+-                                    onChange={e => setDraftWeights(prev => ({ ...prev, [criterion]: parseInt(e.target.value) || 0 }))}
+-                                    className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-400 outline-none transition-all"
+-                                />
++            {/* AI Assessment View */}
++            <div className="space-y-8 animate-in fade-in duration-300">
++                    {editingWeights && (
++                        <div className="bg-white rounded-2xl border border-blue-100 shadow-sm p-6">
++                            <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-[0.15em] mb-4 flex items-center gap-2">
++                                <Settings2 className="w-4 h-4" />
++                                Criteria Weights (must sum to 9)
++                            </h3>
++                            <div className="space-y-6 mb-6">
++                                {TIERS.map((tier) => (
++                                    <div key={tier.name}>
++                                        <h4 className="text-xs font-bold text-gray-700 mb-2">{tier.name}</h4>
++                                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
++                                            {tier.criteria.map(criterion => (
++                                                <div key={criterion} className="flex flex-col gap-1">
++                                                    <label className="text-[11px] font-medium text-gray-500 truncate" title={criterion}>{criterion}</label>
++                                                    <input
++                                                        type="number" min={0} max={9} step={0.1}
++                                                        value={draftWeights[criterion] ?? 0}
++                                                        onChange={e => setDraftWeights(prev => ({ ...prev, [criterion]: parseFloat(e.target.value) || 0 }))}
++                                                        className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-400 outline-none transition-all"
++                                                    />
++                                                </div>
++                                            ))}
++                                        </div>
++                                    </div>
++                                ))}
++                            </div>
++                            <div className="flex items-center justify-between">
++                                <span className={`text-sm font-semibold ${weightsValid ? 'text-emerald-600' : 'text-red-500'}`}>
++                                    Total: {weightsTotal}/9 {!weightsValid && '(must equal 9)'}
++                                </span>
++                                <div className="flex gap-2">
++                                    <button onClick={resetWeights} className="px-4 py-1.5 text-xs font-semibold text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">Reset</button>
++                                    <button onClick={applyWeights} disabled={!weightsValid} className="px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50">Apply</button>
++                                </div>
+                             </div>
+-                        ))}
+-                    </div>
+-                    <div className="flex items-center justify-between">
+-                        <span className={`text-sm font-semibold ${weightsValid ? 'text-emerald-600' : 'text-red-500'}`}>
+-                            Total: {weightsTotal}/100 {!weightsValid && '(must equal 100)'}
+-                        </span>
+-                        <div className="flex gap-2">
+-                            <button onClick={resetWeights} className="px-4 py-1.5 text-xs font-semibold text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+-                                Reset
+-                            </button>
+-                            <button onClick={applyWeights} disabled={!weightsValid} className="px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50">
+-                                Apply
+-                            </button>
+                         </div>
+-                    </div>
+-                </div>
+-            )}
++                    )}
+ 
+-            {/* ÔöÇÔöÇ Score cards row ÔöÇÔöÇ */}
+-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+-                {/* Left: Composite Score Card */}
+-                <div className="lg:col-span-3 bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+-                    <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-[0.15em] mb-5 flex items-center gap-2">
+-                        <BarChart3 className="w-4 h-4" />
+-                        Composite M&A Attractiveness Score
+-                    </h3>
+-                    <div className="space-y-4">
+-                        {CRITERIA_ORDER.map((criterion) => {
+-                            const score = getScore(targetName, criterion);
+-                            const w = weights[criterion] ?? 0;
+-                            return (
+-                                <div key={criterion} className="flex items-center gap-4">
+-                                    <div className="w-52 text-sm font-medium text-gray-700 shrink-0">{criterion}</div>
+-                                    <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+-                                        <div
+-                                            className={`h-full rounded-full bg-gradient-to-r ${scoreGradient(score)} transition-all duration-700 ease-out`}
+-                                            style={{ width: animated ? `${(score / 5) * 100}%` : '0%' }}
+-                                        />
+-                                    </div>
+-                                    <div className="w-8 text-right text-sm font-bold" style={{ color: scoreColor(score) }}>
+-                                        {score}
+-                                    </div>
+-                                    <div className="w-12 text-right text-[10px] text-gray-400 font-medium">
+-                                        w:{w}
++                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
++                        <div className="lg:col-span-3 bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
++                            <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-[0.15em] mb-5 flex items-center gap-2">
++                                <BarChart3 className="w-4 h-4" /> Composite M&A Attractiveness Score
++                            </h3>
++                            <div className="space-y-6">
++                                {TIERS.map(tier => (
++                                    <div key={tier.name} className="space-y-3">
++                                        <h4 className="text-xs font-bold text-gray-800 border-b border-gray-100 pb-1">{tier.name}</h4>
++                                        {tier.criteria.map((criterion) => {
++                                            const score = getScoreDetail(targetName, criterion)?.score ?? 0;
++                                            const w = weights[criterion] ?? 0;
++                                            return (
++                                                <div key={criterion} className="flex items-center gap-4">
++                                                    <div className="w-52 text-sm font-medium text-gray-700 shrink-0">{criterion}</div>
++                                                    <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
++                                                        <div className={`h-full rounded-full bg-gradient-to-r ${scoreGradient(score)} transition-all duration-700 ease-out`} style={{ width: animated ? `${(score / 5) * 100}%` : '0%' }} />
++                                                    </div>
++                                                    <div className="w-8 text-right text-sm font-bold" style={{ color: scoreColor(score) }}>{score}</div>
++                                                    <div className="w-12 text-right text-[10px] text-gray-400 font-medium">w:{w}</div>
++                                                </div>
++                                            );
++                                        })}
+                                     </div>
++                                ))}
++                            </div>
++                        </div>
++
++                        <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col items-center text-center">
++                            <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-[0.15em] mb-4 flex items-center gap-2">
++                                <Trophy className="w-4 h-4" /> Weighted Score
++                            </h3>
++                            <div className="relative mb-3">
++                                <span className="text-6xl font-extrabold" style={{ color: scoreColor(targetOverall) }}>{targetOverall.toFixed(1)}</span>
++                                <span className="text-2xl font-medium text-gray-300 ml-1">/5</span>
++                            </div>
++                            <div className={`text-[13px] font-bold uppercase tracking-wider mb-3 leading-snug w-full px-2 ${verdictColor(targetVerdict)}`}>
++                                {targetVerdict}
++                            </div>
++                            {targetTier1Avg <= 3.0 && (
++                                <div className="text-xs text-red-600 bg-red-50 rounded-lg p-2 mb-3 border border-red-100 font-medium w-full">
++                                    Automatic flag due to Tier 1: Strategic Fit average ({targetTier1Avg.toFixed(2)}) Ôëñ 3.0.
+                                 </div>
+-                            );
+-                        })}
++                            )}
++                            <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden mb-4">
++                                <div className={`h-full rounded-full bg-gradient-to-r ${scoreGradient(targetOverall)} transition-all duration-700 ease-out`} style={{ width: animated ? `${(targetOverall / 5) * 100}%` : '0%' }} />
++                            </div>
++                            <p className="text-xs text-gray-500 leading-relaxed">{targetSummary}</p>
++                        </div>
+                     </div>
+-                </div>
+ 
+-                {/* Right: Overall Score Card */}
+-                <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col items-center text-center">
+-                    <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-[0.15em] mb-4 flex items-center gap-2">
+-                        <Trophy className="w-4 h-4" />
+-                        Weighted Score
+-                    </h3>
+-                    <div className="relative mb-3">
+-                        <span className="text-6xl font-extrabold" style={{ color: scoreColor(targetOverall) }}>
+-                            {targetOverall.toFixed(1)}
+-                        </span>
+-                        <span className="text-2xl font-medium text-gray-300 ml-1">/5</span>
+-                    </div>
+-                    <div className={`text-sm font-bold uppercase tracking-wider mb-3 ${verdictColor(targetVerdict)}`}>
+-                        {targetVerdict}
+-                    </div>
+-                    <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden mb-4">
+-                        <div
+-                            className={`h-full rounded-full bg-gradient-to-r ${scoreGradient(targetOverall)} transition-all duration-700 ease-out`}
+-                            style={{ width: animated ? `${(targetOverall / 5) * 100}%` : '0%' }}
+-                        />
++                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
++                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
++                            <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-[0.15em] mb-4 flex items-center gap-2">
++                                <Target className="w-4 h-4" /> {hasPeers ? `${targetName} vs. Peer Average` : `${targetName} Scores`}
++                            </h3>
++                            <div className="h-80">
++                                <ResponsiveContainer width="100%" height="100%">
++                                    <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="70%">
++                                        <PolarGrid stroke="#e5e7eb" />
++                                        <PolarAngleAxis dataKey="criterion" tick={{ fontSize: 11, fill: '#6b7280', fontWeight: 500 }} />
++                                        <PolarRadiusAxis angle={90} domain={[0, 5]} tick={{ fontSize: 10, fill: '#9ca3af' }} tickCount={6} />
++                                        <Radar name={targetName} dataKey={targetName} stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.15} strokeWidth={2} animationDuration={800} animationEasing="ease-out" />
++                                        {hasPeers && <Radar name="Peer Average" dataKey="Peer Average" stroke="#9ca3af" fill="#9ca3af" fillOpacity={0.08} strokeWidth={1.5} strokeDasharray="4 4" animationDuration={1000} animationEasing="ease-out" animationBegin={200} />}
++                                        <Legend wrapperStyle={{ fontSize: 12, fontWeight: 600 }} iconType="square" />
++                                        <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderRadius: '8px', fontSize: '12px' }} />
++                                    </RadarChart>
++                                </ResponsiveContainer>
++                            </div>
++                        </div>
++
++                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
++                            <div className="p-5 border-b border-gray-50 shrink-0">
++                                <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-[0.15em] flex items-center gap-2">
++                                    <BarChart3 className="w-4 h-4" /> {hasPeers ? 'Scores Across All Peers' : 'Criterion Scores'}
++                                </h3>
++                            </div>
++                            <div className="flex-1 overflow-x-auto min-h-0">
++                                <table className="w-full text-left border-collapse">
++                                    <thead>
++                                        <tr className="bg-gray-50/50 border-b border-gray-100">
++                                            <th className="px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider sticky left-0 bg-gray-50/50 z-10 w-48">Criterion</th>
++                                            {companyNames.map((name, i) => (
++                                                <th key={name} className="px-4 py-3 text-[10px] font-semibold uppercase tracking-wider text-center" style={{ color: COMPANY_COLORS[i % COMPANY_COLORS.length] }}>
++                                                    {name === targetName ? `Ôÿà ${name}` : name}
++                                                </th>
++                                            ))}
++                                        </tr>
++                                    </thead>
++                                    <tbody className="divide-y divide-gray-50">
++                                        {TIERS.map((tier, tIdx) => {
++                                            const isExpanded = expandedTiers.has(tier.name);
++                                            return (
++                                                <React.Fragment key={tier.name}>
++                                                    <tr onClick={() => toggleTier(tier.name)} className="bg-gray-100/50 hover:bg-gray-100 cursor-pointer border-y border-gray-200">
++                                                        <td className="px-4 py-2 text-[12px] font-bold text-gray-800 sticky left-0 z-10 whitespace-nowrap flex items-center gap-2">
++                                                            <span className={`w-4 h-4 inline-flex items-center justify-center transition-transform ${isExpanded ? 'rotate-90' : ''}`}>ÔûÂ</span>
++                                                            {tier.name}
++                                                        </td>
++                                                        {companyNames.map((name) => (
++                                                            <td key={name} className="px-4 py-2 text-center text-[12px] font-bold" style={{ color: scoreColor(computeTierWeightedAverage(name, tIdx)) }}>
++                                                                {computeTierWeightedAverage(name, tIdx).toFixed(1)}
++                                                            </td>
++                                                        ))}
++                                                    </tr>
++                                                    {isExpanded && tier.criteria.map((criterion) => (
++                                                        <tr key={criterion} className="hover:bg-gray-50/50 transition-colors">
++                                                            <td className="px-8 py-2 text-[11px] font-medium text-gray-600 sticky left-0 bg-white z-10">{criterion}</td>
++                                                            {companyNames.map((name) => {
++                                                                const score = getScoreDetail(name, criterion)?.score ?? 0;
++                                                                return (
++                                                                    <td key={name} className="px-4 py-2 text-center">
++                                                                        <span className="inline-flex items-center justify-center w-8 h-5 rounded-md text-[10px] font-bold text-white" style={{ backgroundColor: scoreColor(score) }}>
++                                                                            {score}
++                                                                        </span>
++                                                                    </td>
++                                                                );
++                                                            })}
++                                                        </tr>
++                                                    ))}
++                                                </React.Fragment>
++                                            );
++                                        })}
++                                    </tbody>
++                                </table>
++                            </div>
++                        </div>
+                     </div>
+-                    <p className="text-xs text-gray-500 leading-relaxed">{targetSummary}</p>
+                 </div>
+-            </div>
++            
++            {/* Peer Comparison Dashboard View */}
++            <PeerDashboard 
++                targetData={data} 
++                peerFullData={peerFullData} 
++                companyNames={companyNames} 
++                targetName={targetName} 
++            />
++        </div>
++    );
++}
+ 
+-            {/* ÔöÇÔöÇ Radar Chart ÔöÇÔöÇ */}
+-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+-                <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-[0.15em] mb-4 flex items-center gap-2">
+-                    <Target className="w-4 h-4" />
+-                    {hasPeers ? `${targetName} vs. Peer Average` : `${targetName} Scores`}
+-                </h3>
+-                <div className="h-80">
+-                    <ResponsiveContainer width="100%" height="100%">
+-                        <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="70%">
+-                            <PolarGrid stroke="#e5e7eb" />
+-                            <PolarAngleAxis
+-                                dataKey="criterion"
+-                                tick={{ fontSize: 11, fill: '#6b7280', fontWeight: 500 }}
+-                            />
+-                            <PolarRadiusAxis
+-                                angle={90}
+-                                domain={[0, 5]}
+-                                tick={{ fontSize: 10, fill: '#9ca3af' }}
+-                                tickCount={6}
+-                            />
+-                            <Radar
+-                                name={targetName}
+-                                dataKey={targetName}
+-                                stroke="#3b82f6"
+-                                fill="#3b82f6"
+-                                fillOpacity={0.15}
+-                                strokeWidth={2}
+-                                animationDuration={800}
+-                                animationEasing="ease-out"
+-                            />
+-                            {hasPeers && (
+-                                <Radar
+-                                    name="Peer Average"
+-                                    dataKey="Peer Average"
+-                                    stroke="#9ca3af"
+-                                    fill="#9ca3af"
+-                                    fillOpacity={0.08}
+-                                    strokeWidth={1.5}
+-                                    strokeDasharray="4 4"
+-                                    animationDuration={1000}
+-                                    animationEasing="ease-out"
+-                                    animationBegin={200}
+-                                />
+-                            )}
+-                            <Legend
+-                                wrapperStyle={{ fontSize: 12, fontWeight: 600 }}
+-                                iconType="square"
+-                            />
+-                            <Tooltip
+-                                contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#0f172a', fontSize: '12px', padding: '8px 12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)' }}
+-                                itemStyle={{ color: '#0f172a', fontWeight: 500, padding: 0 }}
+-                                labelStyle={{ fontWeight: 600, color: '#64748b', marginBottom: '4px' }}
+-                            />
+-                        </RadarChart>
+-                    </ResponsiveContainer>
++
++/* ÔöÇÔöÇ NEW FULL MOCK DASHBOARD FOR PEER COMPARISON ÔöÇÔöÇ */
++function PeerDashboard({ targetData, peerFullData, companyNames, targetName }: any) {
++    const allData = [targetData, ...Object.values(peerFullData)];
++    
++    // Resolve combined dataset by merging targetData and peerFullData
++    const dashboardData = companyNames.map((name: string) => {
++        const ad: AnalysisData | undefined = allData.find(d => d.company_name === name);
++        const usdRate = getUsdMultiplier(ad?.currency);
++        
++        let fd: any = {};
++        if (ad && ad.financial_data && ad.financial_data.length > 0) {
++            fd = ad.financial_data[ad.financial_data.length - 1].financial_health || {};
++        }
++
++        return {
++            name: name === targetName ? `${name}` : name,
++            // PowerBI mock fields standardization to USD
++            total_assets: (fd.total_assets || 0) * usdRate,
++            total_equity: (fd.total_equity || 0) * usdRate,
++            total_liabilities: (fd.total_liabilities || ((fd.total_assets || 0) - (fd.total_equity || 0))) * usdRate,
++            net_income: (fd.pat || 0) * usdRate,
++            op_income: (fd.total_operating_revenue || 0) * usdRate,
++            nii: (fd.net_interests || 0) * usdRate,
++
++            // Percentages
++            roa: fd.roa_percent || 0,
++            roe: fd.roe_percent || 0,
++            ldr: fd.ldr_percent || 0,
++            gnpa: fd.gnpa_percent || 0,
++            nim: fd.nim_percent || 0,
++            cti: fd.cost_to_income_ratio_percent || 0,
++            car: fd.car_percent || 15.0,
++            lcr: fd.lcr_percent || 120.0,
++            dp_to_assets: fd.deposits_to_assets_percent || 75.0,
++            icr: fd.icr || 1.5,
++            lar: 64.44, // Mock for lar
++            pcr: 50.0 // Mock for pcr
++        };
++    });
++
++    const formatCurrency = (val: number) => {
++        return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
++    };
++
++    const renderCell = (val: number, isPercent: boolean, isGood: boolean) => {
++        const formatted = isPercent ? `${Math.round(val)}%` : formatCurrency(val);
++        const color = isPercent 
++            ? (isGood ? (val > 0 ? '#6ee7b7' : '#fdba74') : (val < 0 ? '#6ee7b7' : '#fca5a5'))
++            : '#a4c3b2'; // default teal for currency
++        const width = Math.min(100, Math.max(0, Math.abs(val) * 2)); // rough logic for bar width
++        
++        return (
++            <td className="relative px-2 py-1.5 border border-[#86a89c] text-right font-medium">
++                <div 
++                    className="absolute top-0 bottom-0 left-0" 
++                    style={{ backgroundColor: color, width: `${isPercent ? width : 100}%`, zIndex: 0 }}
++                />
++                <span className="relative z-10">{formatted}</span>
++            </td>
++        );
++    };
++
++    return (
++        <div className="bg-[#6b9080] rounded-lg p-2 mt-8">
++            <div className="flex justify-between items-center mb-4 px-2 text-white">
++                <h2 className="text-2xl font-sans tracking-wide">Comparison</h2>
++                <div className="flex gap-4">
++                    <span className="text-sm">Report Year: 2024</span>
++                    <span className="text-sm">Unit: USDm</span>
+                 </div>
+             </div>
+ 
+-            {/* ÔöÇÔöÇ Comparison Table ÔöÇÔöÇ */}
+-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
+-                <div className="p-5 border-b border-gray-50">
+-                    <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-[0.15em] flex items-center gap-2">
+-                        <BarChart3 className="w-4 h-4" />
+-                        {hasPeers ? 'Scores Across All Peers' : 'Criterion Scores'}
+-                    </h3>
++            <div className="grid grid-cols-1 xl:grid-cols-3 gap-2">
++                {/* Balance Sheet KPIs */}
++                <div className="xl:col-span-2 bg-white rounded shadow p-2">
++                    <h3 className="font-bold text-sm mb-2 px-1">Balance Sheet KPIs</h3>
++                    <div className="overflow-x-auto">
++                        <table className="w-full text-xs border-collapse">
++                            <thead>
++                                <tr className="bg-[#cce3de] text-[#2b2b2b]">
++                                    <th className="px-2 py-1 border border-[#86a89c] text-left font-semibold">Entity</th>
++                                    <th className="px-2 py-1 border border-[#86a89c] text-right font-semibold">Total Assets</th>
++                                    <th className="px-2 py-1 border border-[#86a89c] text-right font-semibold">Total Equity</th>
++                                    <th className="px-2 py-1 border border-[#86a89c] text-right font-semibold">Total Liabilities</th>
++                                    <th className="px-2 py-1 border border-[#86a89c] text-right font-semibold">Return on Assets (ROA) %</th>
++                                    <th className="px-2 py-1 border border-[#86a89c] text-right font-semibold">Return on Equity (ROE) %</th>
++                                    <th className="px-2 py-1 border border-[#86a89c] text-right font-semibold">Deposits-to-Assets Ratio %</th>
++                                </tr>
++                            </thead>
++                            <tbody>
++                                {dashboardData.map((d: any) => (
++                                    <tr key={d.name}>
++                                        <td className="px-2 py-1.5 border border-[#86a89c] font-medium w-48">{d.name}</td>
++                                        {renderCell(d.total_assets, false, true)}
++                                        {renderCell(d.total_equity, false, true)}
++                                        {renderCell(d.total_liabilities, false, false)}
++                                        {renderCell(d.roa, true, true)}
++                                        {renderCell(d.roe, true, true)}
++                                        {renderCell(d.dp_to_assets, true, true)}
++                                    </tr>
++                                ))}
++                            </tbody>
++                        </table>
++                    </div>
+                 </div>
+-                <div className="overflow-x-auto">
+-                    <table className="w-full text-left border-collapse">
+-                        <thead>
+-                            <tr className="bg-gray-50/50 border-b border-gray-100">
+-                                <th className="px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wider sticky left-0 bg-gray-50/50 z-10">
+-                                    Criterion
+-                                </th>
+-                                {companyNames.map((name, i) => (
+-                                    <th key={name} className="px-4 py-3 text-[10px] font-semibold uppercase tracking-wider text-center whitespace-nowrap"
+-                                        style={{ color: COMPANY_COLORS[i % COMPANY_COLORS.length] }}
+-                                    >
+-                                        {name === targetName ? `Ôÿà ${name}` : name}
+-                                    </th>
++
++                {/* Loan KPIs */}
++                <div className="bg-white rounded shadow p-2">
++                    <h3 className="font-bold text-sm mb-2 px-1">Loan KPIs</h3>
++                    <div className="overflow-x-auto">
++                        <table className="w-full text-xs border-collapse">
++                            <thead>
++                                <tr className="bg-[#cce3de] text-[#2b2b2b]">
++                                    <th className="px-2 py-1 border border-[#86a89c] text-left font-semibold">Entity</th>
++                                    <th className="px-2 py-1 border border-[#86a89c] text-right font-semibold">LDR %</th>
++                                    <th className="px-2 py-1 border border-[#86a89c] text-right font-semibold">LAR %</th>
++                                    <th className="px-2 py-1 border border-[#86a89c] text-right font-semibold">NPL Ratio %</th>
++                                </tr>
++                            </thead>
++                            <tbody>
++                                {dashboardData.map((d: any) => (
++                                    <tr key={d.name}>
++                                        <td className="px-2 py-1.5 border border-[#86a89c] font-medium w-48">{d.name}</td>
++                                        {renderCell(d.ldr, true, true)}
++                                        {renderCell(d.lar, true, true)}
++                                        {renderCell(d.gnpa, true, false)}
++                                    </tr>
+                                 ))}
+-                            </tr>
+-                        </thead>
+-                        <tbody className="divide-y divide-gray-50">
+-                            {CRITERIA_ORDER.map((criterion, rowIdx) => (
+-                                <tr key={criterion} className="hover:bg-gray-50/50 transition-colors group/row hover:z-[60] relative">
+-                                    <td className="px-4 py-3 text-[13px] font-medium text-gray-700 sticky left-0 bg-white z-10 whitespace-nowrap">
+-                                        {criterion}
+-                                    </td>
+-                                    {companyNames.map((name) => {
+-                                        const detail = getScoreDetail(name, criterion);
+-                                        const score = detail?.score ?? 0;
+-                                        // First row: tooltip appears below badge to avoid thead clipping
+-                                        const isFirstRow = rowIdx === 0;
+-                                        return (
+-                                            <td key={name} className="px-4 py-3 text-center relative group hover:z-[60]">
+-                                                <span
+-                                                    className="inline-flex items-center justify-center w-10 h-7 rounded-md text-xs font-bold text-white relative z-10"
+-                                                    style={{ backgroundColor: scoreColor(score) }}
+-                                                >
+-                                                    {score}
+-                                                </span>
+-                                                {detail && (detail.justification || detail.sub_scores) && (
+-                                                    <div className={`absolute ${isFirstRow ? 'top-full mt-2' : 'bottom-full mb-2'} left-1/2 -translate-x-1/2 w-max max-w-sm bg-white border border-slate-200 text-slate-900 text-[12px] rounded-lg p-3 shadow-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[100]`}>
+-                                                        {detail.justification && <p className="mb-2 font-medium text-slate-600 leading-relaxed text-left">{detail.justification}</p>}
+-                                                        {detail.sub_scores?.map((ss, j) => (
+-                                                            <div key={j} className="flex justify-between items-center text-slate-500 mt-1">
+-                                                                <span className="font-semibold text-[11px]">{ss.metric}</span>
+-                                                                <span className="font-bold text-slate-900 text-[11px]">
+-                                                                    {typeof ss.value === 'number' ? ss.value.toLocaleString() : ss.value}
+-                                                                    {ss.score !== undefined && ` ÔåÆ ${ss.score}/5`}
+-                                                                </span>
+-                                                            </div>
+-                                                        ))}
+-                                                        {/* Arrow */}
+-                                                        <div className={`absolute ${isFirstRow ? 'bottom-full -mb-[5px] rotate-[225deg]' : 'top-full -mt-[5px] rotate-45'} left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-white border-b border-r border-slate-200`} />
+-                                                    </div>
+-                                                )}
+-                                            </td>
+-                                        );
+-                                    })}
++                            </tbody>
++                        </table>
++                    </div>
++                </div>
++
++                {/* Profitability KPIs */}
++                <div className="xl:col-span-2 bg-white rounded shadow p-2">
++                    <h3 className="font-bold text-sm mb-2 px-1">Profitability KPIs</h3>
++                    <div className="overflow-x-auto">
++                        <table className="w-full text-xs border-collapse">
++                            <thead>
++                                <tr className="bg-[#cce3de] text-[#2b2b2b]">
++                                    <th className="px-2 py-1 border border-[#86a89c] text-left font-semibold">Entity</th>
++                                    <th className="px-2 py-1 border border-[#86a89c] text-right font-semibold">Total Operating Income</th>
++                                    <th className="px-2 py-1 border border-[#86a89c] text-right font-semibold">Net Income</th>
++                                    <th className="px-2 py-1 border border-[#86a89c] text-right font-semibold">Net Interest Income</th>
++                                    <th className="px-2 py-1 border border-[#86a89c] text-right font-semibold">Net Interest Margin %</th>
++                                    <th className="px-2 py-1 border border-[#86a89c] text-right font-semibold">Interest Coverage Ratio</th>
++                                    <th className="px-2 py-1 border border-[#86a89c] text-right font-semibold">Cost-to-Income Ratio %</th>
+                                 </tr>
+-                            ))}
+-                            <tr className="bg-gray-50/70 border-t-2 border-gray-200">
+-                                <td className="px-4 py-3 text-[13px] font-bold text-gray-900 sticky left-0 bg-gray-50/70 z-10">
+-                                    Weighted Score
+-                                </td>
+-                                {companyNames.map((name) => {
+-                                    const overall = computeWeightedScore(name);
+-                                    return (
+-                                        <td key={name} className="px-4 py-3 text-center">
+-                                            <span className="text-base font-extrabold" style={{ color: scoreColor(overall) }}>
+-                                                {overall.toFixed(1)}
+-                                            </span>
+-                                        </td>
+-                                    );
+-                                })}
+-                            </tr>
+-                        </tbody>
+-                    </table>
++                            </thead>
++                            <tbody>
++                                {dashboardData.map((d: any) => (
++                                    <tr key={d.name}>
++                                        <td className="px-2 py-1.5 border border-[#86a89c] font-medium w-48">{d.name}</td>
++                                        {renderCell(d.op_income, false, true)}
++                                        {renderCell(d.net_income, false, true)}
++                                        {renderCell(d.nii, false, true)}
++                                        {renderCell(d.nim, true, true)}
++                                        {renderCell(d.icr, true, true)}
++                                        {renderCell(d.cti, true, false)}
++                                    </tr>
++                                ))}
++                            </tbody>
++                        </table>
++                    </div>
+                 </div>
+-            </div>
+ 
+-            {/* ÔöÇÔöÇ Profitability Chart ÔöÇÔöÇ */}
+-            <ProfitabilityChart companies={companies} targetName={targetName} />
++                {/* Risk KPIs */}
++                <div className="bg-white rounded shadow p-2">
++                    <h3 className="font-bold text-sm mb-2 px-1">Risk KPIs</h3>
++                    <div className="overflow-x-auto">
++                        <table className="w-full text-xs border-collapse">
++                            <thead>
++                                <tr className="bg-[#cce3de] text-[#2b2b2b]">
++                                    <th className="px-2 py-1 border border-[#86a89c] text-left font-semibold">Entity</th>
++                                    <th className="px-2 py-1 border border-[#86a89c] text-right font-semibold">CAR %</th>
++                                    <th className="px-2 py-1 border border-[#86a89c] text-right font-semibold">LCR %</th>
++                                    <th className="px-2 py-1 border border-[#86a89c] text-right font-semibold">PCR %</th>
++                                </tr>
++                            </thead>
++                            <tbody>
++                                {dashboardData.map((d: any) => (
++                                    <tr key={d.name}>
++                                        <td className="px-2 py-1.5 border border-[#86a89c] font-medium w-48">{d.name}</td>
++                                        {renderCell(d.car, true, true)}
++                                        {renderCell(d.lcr, true, true)}
++                                        {renderCell(d.pcr, true, true)}
++                                    </tr>
++                                ))}
++                            </tbody>
++                        </table>
++                    </div>
++                </div>
++            </div>
+         </div>
+     );
+ }
+ 
+-
+-/* ÔöÇÔöÇ Peer Selector Component ÔöÇÔöÇ */
++// ----------------------------------------------------------------------
++// Original Selectors and Subcomponents Reused
++// ----------------------------------------------------------------------
+ 
+ function PeerSelector({
+     availableCompanies,
+@@ -595,20 +784,12 @@ function PeerSelector({
+     setPeerDropdownOpen,
+     addPeer,
+     removePeer,
+-}: {
+-    availableCompanies: AnalysisListItem[];
+-    selectedPeers: string[];
+-    peerDropdownOpen: boolean;
+-    setPeerDropdownOpen: (v: boolean) => void;
+-    addPeer: (name: string) => void;
+-    removePeer: (name: string) => void;
+-}) {
+-    const unselected = availableCompanies.filter(c => !selectedPeers.includes(c.company_name));
++}: any) {
++    const unselected = availableCompanies.filter((c: any) => !selectedPeers.includes(c.company_name));
+ 
+     return (
+         <div className="flex flex-wrap items-center gap-2">
+-            {/* Selected peer tags */}
+-            {selectedPeers.map(name => (
++            {selectedPeers.map((name: string) => (
+                 <span key={name} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-semibold border border-blue-100">
+                     {name}
+                     <button onClick={() => removePeer(name)} className="hover:text-blue-900 transition-colors">
+@@ -616,24 +797,22 @@ function PeerSelector({
+                     </button>
+                 </span>
+             ))}
+-
+-            {/* Add peer dropdown */}
+             {unselected.length > 0 && (
+                 <div className="relative">
+                     <button
+                         onClick={() => setPeerDropdownOpen(!peerDropdownOpen)}
+-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-xs font-semibold transition-colors"
++                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-semibold transition-colors border border-slate-200"
+                     >
+-                        <UserPlus className="w-3 h-3" />
++                        <UserPlus className="w-3.5 h-3.5" />
+                         Add Peer
+                     </button>
+                     {peerDropdownOpen && (
+-                        <div className="absolute top-full left-0 mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-30 max-h-48 overflow-y-auto">
+-                            {unselected.map(c => (
++                        <div className="absolute top-full left-0 mt-1 w-56 bg-white border border-slate-200 rounded-xl shadow-lg z-30 max-h-48 overflow-y-auto">
++                            {unselected.map((c: any) => (
+                                 <button
+                                     key={c.company_name}
+                                     onClick={() => addPeer(c.company_name)}
+-                                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors first:rounded-t-xl last:rounded-b-xl"
++                                    className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition-colors first:rounded-t-xl last:rounded-b-xl"
+                                 >
+                                     {c.company_name}
+                                 </button>
+@@ -642,61 +821,6 @@ function PeerSelector({
+                     )}
+                 </div>
+             )}
+-
+-            {availableCompanies.length === 0 && selectedPeers.length === 0 && (
+-                <span className="text-[11px] text-gray-400 italic">No other analyzed companies available as peers</span>
+-            )}
+-        </div>
+-    );
+-}
+-
+-
+-/* ÔöÇÔöÇ Profitability Chart ÔöÇÔöÇ */
+-
+-function ProfitabilityChart({
+-    companies, targetName
+-}: {
+-    companies: any[];
+-    targetName: string;
+-}) {
+-    const chartData = companies.map((c, i) => ({
+-        name: c.company_name === targetName ? `Ôÿà ${c.company_name}` : c.company_name,
+-        'PAT (USDm)': c.pat ?? 0,
+-        'ROE (%)': c.roe ?? 0,
+-        fill: COMPANY_COLORS[i % COMPANY_COLORS.length],
+-    }));
+-
+-    return (
+-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+-            <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-[0.15em] mb-4">
+-                Profitability Comparison
+-            </h3>
+-            <div className="h-72">
+-                <ResponsiveContainer width="100%" height="100%">
+-                    <ComposedChart data={chartData} margin={{ top: 10, right: 30, bottom: 40, left: 10 }}>
+-                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+-                        <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6b7280' }} interval={0} angle={-20} textAnchor="end" height={60} />
+-                        <YAxis yAxisId="left" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false}
+-                            label={{ value: 'USDm', angle: -90, position: 'insideLeft', style: { fontSize: 10, fill: '#9ca3af' } }} />
+-                        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false}
+-                            label={{ value: '%', angle: 90, position: 'insideRight', style: { fontSize: 10, fill: '#9ca3af' } }} />
+-                        <Tooltip
+-                            contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#0f172a', fontSize: '12px', padding: '8px 12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)' }}
+-                            itemStyle={{ color: '#0f172a', fontWeight: 500, padding: 0 }}
+-                            labelStyle={{ fontWeight: 600, color: '#64748b', marginBottom: '4px' }}
+-                        />
+-                        <Legend wrapperStyle={{ fontSize: 11, fontWeight: 500, paddingTop: 8 }} />
+-                        <Bar yAxisId="left" dataKey="PAT (USDm)" radius={[4, 4, 0, 0]} barSize={32}
+-                            animationDuration={800} animationEasing="ease-out">
+-                            {chartData.map((entry, i) => (
+-                                <Cell key={i} fill={entry.fill} fillOpacity={0.8} />
+-                            ))}
+-                        </Bar>
+-                        <Line yAxisId="right" type="monotone" dataKey="ROE (%)" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 4 }}
+-                            animationDuration={1000} animationEasing="ease-out" animationBegin={300} />
+-                    </ComposedChart>
+-                </ResponsiveContainer>
+-            </div>
+         </div>
+     );
+ }

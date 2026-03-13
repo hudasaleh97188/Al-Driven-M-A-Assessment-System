@@ -56,3 +56,25 @@ export async function fetchPeerRating(companyName: string): Promise<PeerRatingRe
     if (!res.ok) throw new Error('No peer rating found');
     return res.json();
 }
+
+export async function overrideFinancialMetrics(
+    companyName: string, 
+    year: number, 
+    metrics: Record<string, any>, 
+    username: string
+): Promise<AnalysisData> {
+    const res = await fetch(`${API_BASE}/api/analysis/${encodeURIComponent(companyName)}/metrics`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            username,
+            overrides: [{ year, metrics }]
+        }),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Failed to save metrics' }));
+        throw new Error(err.detail || 'Failed to save metrics');
+    }
+    return res.json();
+}
+

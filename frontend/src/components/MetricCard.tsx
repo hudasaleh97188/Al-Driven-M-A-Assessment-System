@@ -17,7 +17,7 @@ interface MetricCardProps {
 
 export default function MetricCard({
     title, value, delta, isRatio = false, isNegativeGood = false,
-    chartData, chartKey = 'val', baselineYear, suffix, latestYear, badge
+    chartData, chartKey = 'val', baselineYear, suffix, badge
 }: MetricCardProps) {
     const isPositiveDelta = typeof delta === 'number' && delta >= 0;
     const valueSuffix = suffix ?? (isRatio ? '%' : '');
@@ -30,12 +30,11 @@ export default function MetricCard({
     }
 
     return (
-        <div className="bg-white rounded-2xl p-5 flex flex-col justify-between shadow-sm border border-gray-100/80 hover:shadow-md transition-shadow duration-300 relative">
-            {badge && <div className="absolute top-2 right-2">{badge}</div>}
+        <div className="bg-white rounded-2xl p-5 pb-8 flex flex-col justify-between shadow-sm border border-gray-100/80 hover:shadow-md transition-shadow duration-300 relative">
+            {badge && <div className="absolute bottom-2 right-3 z-10">{badge}</div>}
             <div>
                 <div className="flex items-center justify-between mb-2">
                     <h3 className="text-gray-400 uppercase tracking-wider text-[11px] font-semibold">{title}</h3>
-                    {latestYear && <span className="text-[10px] text-gray-300 font-medium">{latestYear}</span>}
                 </div>
                 <div className="text-2xl font-bold text-gray-900 tracking-tight">
                     {value !== undefined && value !== null

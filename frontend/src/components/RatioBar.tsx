@@ -5,8 +5,8 @@ export default function RatioBar({ ratio, badge }: { ratio: number | string; bad
     const barColor = validRatio < 1.0 ? 'bg-orange-500' : 'bg-blue-500';
 
     return (
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100/80 hover:shadow-md transition-shadow duration-300 relative">
-            {badge && <div className="absolute top-2 right-2">{badge}</div>}
+        <div className="bg-white rounded-2xl p-5 pb-8 shadow-sm border border-gray-100/80 hover:shadow-md transition-shadow duration-300 relative">
+            {badge && <div className="absolute bottom-2 right-3 z-10">{badge}</div>}
             <h3 className="text-gray-400 uppercase tracking-wider text-[11px] font-semibold mb-2">Deposits vs Borrowings</h3>
             <div className="text-2xl font-bold text-gray-900 tracking-tight mb-3">{validRatio.toFixed(2)}x</div>
 

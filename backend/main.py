@@ -38,6 +38,7 @@ from app.database import (
     save_peer_rating,
     update_run,
     upsert_company,
+    update_approved_financial_metric,
 )
 from app.extractor import run_pipeline
 from app.peer_rating import run_peer_rating
@@ -162,11 +163,9 @@ async def analyze_company(
 
     finally:
         # Clean up temp files
-        for path in file_paths:
-            if os.path.exists(path):
-                os.remove(path)
+        import shutil
         if os.path.exists(temp_dir):
-            os.rmdir(temp_dir)
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 @app.get("/api/analysis/{company_name}")
@@ -175,10 +174,50 @@ def get_company_analysis(company_name: str):
     data = get_latest_analysis(company_name)
     if not data:
         raise HTTPException(status_code=404, detail="Company not found")
-    # Ensure computed ratios exist (handles old DB records missing them)
+    # Ensure computed ratios exist
     if "financial_data" in data:
         enrich_financial_data(data["financial_data"])
     return data
+
+
+class MetricOverride(BaseModel):
+    year: int
+    metrics: dict
+
+class MetricsOverrideRequest(BaseModel):
+    overrides: list[MetricOverride]
+    username: str = "reviewer"
+
+@app.post("/api/analysis/{company_name}/metrics")
+def override_metrics(company_name: str, request: MetricsOverrideRequest):
+    """
+    Override foundational financial metrics for a company.
+    Calculates derived metrics automatically when retrieving the updated analysis.
+    """
+    analysis = get_latest_analysis(company_name)
+    if not analysis:
+        raise HTTPException(status_code=404, detail="Company analysis not found")
+        
+    run_id = analysis.get("run_id")
+    if not run_id:
+        raise HTTPException(status_code=500, detail="Missing run_id in analysis")
+
+    # Save each overridden metric
+    for override in request.overrides:
+        year = override.year
+        for metric_name, value in override.metrics.items():
+            update_approved_financial_metric(run_id, year, metric_name, value, request.username)
+
+    # Re-fetch the analysis (now with approved metrics overlay)
+    updated_analysis = get_latest_analysis(company_name)
+    if not updated_analysis:
+        raise HTTPException(status_code=500, detail="Failed to retrieve updated analysis")
+        
+    # Recompute derived metrics
+    if "financial_data" in updated_analysis:
+        enrich_financial_data(updated_analysis["financial_data"])
+        
+    return updated_analysis
 
 
 @app.get("/api/analyses")

@@ -25,9 +25,23 @@ from app.config import DB_PATH
 SCHEMA_SQL = """
 PRAGMA foreign_keys = ON;
 
+CREATE TABLE IF NOT EXISTS users (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    username      TEXT UNIQUE NOT NULL COLLATE NOCASE,
+    password_hash TEXT NOT NULL,
+    role          TEXT NOT NULL CHECK(role IN ('viewer','reviewer','admin')),
+    created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT OR IGNORE INTO users (id, username, password_hash, role) 
+VALUES (1, 'admin', 'mock_hash_admin', 'admin'),
+       (2, 'reviewer', 'mock_hash_reviewer', 'reviewer'),
+       (3, 'viewer', 'mock_hash_viewer', 'viewer');
+
 CREATE TABLE IF NOT EXISTS companies (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     name        TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+    industry    TEXT,
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -44,10 +58,35 @@ CREATE TABLE IF NOT EXISTS analysis_runs (
 );
 
 CREATE TABLE IF NOT EXISTS peer_ratings (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    company_id  INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-    run_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
-    result_json TEXT
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id        INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    peer_company_name TEXT,
+    run_at            DATETIME DEFAULT CURRENT_TIMESTAMP,
+    result_json       TEXT
+);
+
+CREATE TABLE IF NOT EXISTS financial_metrics (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    analysis_run_id   INTEGER NOT NULL REFERENCES analysis_runs(id) ON DELETE CASCADE,
+    category          TEXT,
+    metric_name       TEXT NOT NULL,
+    is_calculated     BOOLEAN NOT NULL DEFAULT 0,
+    reported_currency TEXT,
+    value_reported    REAL,
+    value_usd         REAL,
+    year              INTEGER,
+    confidence_score  REAL,
+    explanation       TEXT
+);
+
+CREATE TABLE IF NOT EXISTS financial_metrics_approved (
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    analysis_run_id         INTEGER NOT NULL REFERENCES analysis_runs(id) ON DELETE CASCADE,
+    metric_id               INTEGER NOT NULL REFERENCES financial_metrics(id) ON DELETE CASCADE,
+    value_usd_approved      REAL,
+    value_reported_approved REAL,
+    reviewed_by             INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    reviewed_at             DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 """
 
@@ -124,8 +163,33 @@ def update_run(run_id: int, *, status: str, result: Optional[dict] = None,
                 run_id,
             ),
         )
+        
+        # Save raw metrics if completed
+        if result and status == "completed":
+            financial_data = result.get("financial_data", [])
+            _save_raw_financial_metrics_inline(conn, run_id, financial_data, currency)
+            
         conn.commit()
     logger.info("[DB] Updated run_id={} → status={}", run_id, status)
+
+def _save_raw_financial_metrics_inline(conn, run_id, financial_data, currency):
+    conn.execute("DELETE FROM financial_metrics WHERE analysis_run_id = ?", (run_id,))
+    for block in financial_data:
+        year = block.get("year")
+        if not year:
+            continue
+        fh = block.get("financial_health", {})
+        for metric, value in fh.items():
+            if value is None or not isinstance(value, (int, float)):
+                continue
+            is_calc = 1 if metric.endswith("_percent") or metric in ["depositors_vs_borrowers_ratio"] else 0
+            cat = "Calculated" if is_calc else "Foundational"
+            conn.execute(
+                """INSERT INTO financial_metrics
+                   (analysis_run_id, category, metric_name, is_calculated, reported_currency, value_reported, year)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (run_id, cat, metric, is_calc, currency, float(value), year)
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -136,7 +200,7 @@ def get_latest_analysis(company_name: str) -> Optional[Dict]:
     """Return the most recent *completed* analysis for a company, or None."""
     with _get_conn() as conn:
         row = conn.execute(
-            """SELECT c.id AS company_id, ar.result_json, ar.currency, ar.run_at
+            """SELECT c.id AS company_id, ar.id AS run_id, ar.result_json, ar.currency, ar.run_at
                FROM analysis_runs ar
                JOIN companies c ON c.id = ar.company_id
                WHERE c.name = ? AND ar.status = 'completed'
@@ -154,7 +218,21 @@ def get_latest_analysis(company_name: str) -> Optional[Dict]:
     data["company_id"] = row["company_id"]
     data["company_name"] = company_name
     data["currency"] = row["currency"] or data.get("currency", "USD")
-    logger.info("[DB] Returning analysis for '{}' (id={}, run_at={})", company_name, row["company_id"], row["run_at"])
+    
+    # Overlay approved metrics
+    run_id = row["run_id"]
+    overrides = get_approved_financial_metrics(run_id)
+    if overrides and "financial_data" in data:
+        for year_block in data["financial_data"]:
+            year = year_block.get("year")
+            if year in overrides:
+                if "financial_health" not in year_block:
+                    year_block["financial_health"] = {}
+                for k, v in overrides[year].items():
+                    year_block["financial_health"][k] = v
+
+    data["run_id"] = run_id
+    logger.info("[DB] Returning analysis for '{}' (company_id={}, run_id={}, run_at={})", company_name, row["company_id"], run_id, row["run_at"])
     return data
 
 
@@ -226,4 +304,58 @@ def delete_company(company_name: str) -> bool:
     else:
         logger.warning("[DB] Company '{}' not found for deletion", company_name)
     return deleted
+
+
+def get_approved_financial_metrics(run_id: int) -> dict:
+    """Returns {year: {metric_name: value}} for a given analysis run."""
+    with _get_conn() as conn:
+        rows = conn.execute(
+            """SELECT fm.year, fm.metric_name, fma.value_reported_approved
+               FROM financial_metrics_approved fma
+               JOIN financial_metrics fm ON fma.metric_id = fm.id
+               WHERE fma.analysis_run_id = ?""",
+            (run_id,)
+        ).fetchall()
+        
+    out = {}
+    for r in rows:
+        y = r["year"]
+        if y not in out:
+            out[y] = {}
+        out[y][r["metric_name"]] = r["value_reported_approved"]
+    return out
+
+
+def update_approved_financial_metric(run_id: int, year: int, metric_name: str, value: float, username: str = "reviewer") -> bool:
+    """Inserts or updates a single validated financial metric override."""
+    with _get_conn() as conn:
+        user_row = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
+        user_id = user_row["id"] if user_row else None
+        
+        metric_row = conn.execute(
+            "SELECT id FROM financial_metrics WHERE analysis_run_id = ? AND year = ? AND metric_name = ?",
+            (run_id, year, metric_name)
+        ).fetchone()
+        
+        if not metric_row:
+            cursor = conn.execute(
+                """INSERT INTO financial_metrics 
+                 (analysis_run_id, category, metric_name, is_calculated, year)
+                 VALUES (?, 'Foundational', ?, 0, ?)""", (run_id, metric_name, year)
+            )
+            metric_id = cursor.lastrowid
+        else:
+            metric_id = metric_row["id"]
+            
+        conn.execute("DELETE FROM financial_metrics_approved WHERE metric_id = ?", (metric_id,))
+        if value is not None and value != '':
+            conn.execute(
+                """INSERT INTO financial_metrics_approved
+                   (analysis_run_id, metric_id, value_reported_approved, reviewed_by, reviewed_at)
+                   VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)""",
+                (run_id, metric_id, float(value), user_id)
+            )
+        conn.commit()
+    logger.info("[DB] User {} approved metric {}={} for run {}, year {}", username, metric_name, value, run_id, year)
+    return True
 

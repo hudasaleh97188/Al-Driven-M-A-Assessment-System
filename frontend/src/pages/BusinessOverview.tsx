@@ -159,7 +159,7 @@ export default function BusinessOverview({ data }: { data: AnalysisData }) {
                                         <Tooltip
                                             contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#0f172a', fontSize: '12px', padding: '8px 12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)' }}
                                             itemStyle={{ color: '#0f172a', fontWeight: 500, padding: 0 }}
-                                            formatter={(v: any) => [`${v}%`, 'Ownership']}
+                                            formatter={(v: any, name: any) => [`${v}%`, name]}
                                         />
                                     </PieChart>
                                 </ResponsiveContainer>
@@ -239,7 +239,7 @@ export default function BusinessOverview({ data }: { data: AnalysisData }) {
                     {/* Hardcoded Sources */}
                     <div className="mt-4 flex gap-2 items-center flex-wrap">
                         <span className="text-xs text-slate-500 font-medium whitespace-nowrap">Sources:</span>
-                        <SourceBadge source="Web Search" label="Google Search, News, Vendor Press Releases" />
+                        <SourceBadge source="Web Search" label="Web Search, News, Vendor Press Releases" />
                     </div>
                 </section>
             )}
@@ -257,7 +257,7 @@ export default function BusinessOverview({ data }: { data: AnalysisData }) {
 
                     <div className="mt-4 flex gap-2 items-center flex-wrap">
                         <span className="text-xs text-slate-500 font-medium whitespace-nowrap">Sources:</span>
-                        <SourceBadge source="Web Search" label="Google Search, News, Central Bank Sector Reports, Industry Studies" />
+                        <SourceBadge source="Web Search" label="Web Search, News, Central Bank Sector Reports, Industry Studies" />
                     </div>
                 </section>
             )}
@@ -340,8 +340,8 @@ function SectionHeader({ icon, title, color, noMargin = false }: { icon: React.R
 
 function StatCard({ icon, label, value, badge }: { icon: React.ReactNode; label: string; value?: number | string; badge?: React.ReactNode }) {
     return (
-        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm flex items-center gap-3 relative">
-            {badge && <div className="absolute top-2 right-2">{badge}</div>}
+        <div className="bg-white rounded-2xl p-4 pb-8 border border-gray-100 shadow-sm flex items-center gap-3 relative">
+            {badge && <div className="absolute bottom-2 right-2 z-10">{badge}</div>}
             <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center flex-shrink-0">{icon}</div>
             <div>
                 <div className="text-xl font-bold text-gray-900">{value !== undefined ? (typeof value === 'number' ? value.toLocaleString() : value) : '—'}</div>
