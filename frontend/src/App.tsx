@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { fetchAnalyses, fetchAnalysis, runAnalysis } from './api';
 import type { AnalysisData, AnalysisListItem } from './types';
 
@@ -7,8 +7,11 @@ import UploadForm from './components/UploadForm';
 import BusinessOverview from './pages/BusinessOverview';
 import FinancialHealth from './pages/FinancialHealth';
 import RatingComparison from './pages/RatingComparison';
+import EditFinancials from './pages/EditFinancials';
+import EditOverview from './pages/EditOverview';
 
 type Tab = 'overview' | 'financial' | 'rating';
+type EditMode = null | { type: 'financial'; statementId: number } | { type: 'overview' };
 
 const TABS: { key: Tab; label: string }[] = [
     { key: 'overview', label: 'Business Overview' },
@@ -23,15 +26,25 @@ export default function App() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [tab, setTab] = useState<Tab>('overview');
+    const [editMode, setEditMode] = useState<EditMode>(null);
 
     // Fetch history on mount and after data changes
     useEffect(() => {
         fetchAnalyses().then(setHistory).catch(() => { });
     }, [data, showForm]);
 
+    const reloadData = useCallback(async () => {
+        if (!data) return;
+        try {
+            const result = await fetchAnalysis(data.company_name);
+            setData(normalise(result));
+        } catch { }
+    }, [data]);
+
     const handleLoadCompany = async (name: string) => {
         setLoading(true);
         setError('');
+        setEditMode(null);
         try {
             const result = await fetchAnalysis(name);
             setData(normalise(result));
@@ -65,7 +78,29 @@ export default function App() {
         }
     };
 
-    const goHome = () => { setData(null); setShowForm(false); };
+    const goHome = () => { setData(null); setShowForm(false); setEditMode(null); };
+
+    const handleEditFinancials = (statementId: number) => {
+        setEditMode({ type: 'financial', statementId });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const handleEditOverview = () => {
+        setEditMode({ type: 'overview' });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const handleEditBack = () => {
+        setEditMode(null);
+        reloadData();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const handleOverviewSaved = () => {
+        setEditMode(null);
+        reloadData();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
 
     return (
         <div className="min-h-screen">
@@ -90,8 +125,8 @@ export default function App() {
                     )}
                 </div>
 
-                {/* Tab bar */}
-                {data && (
+                {/* Tab bar - hidden during edit mode */}
+                {data && !editMode && (
                     <div className="max-w-7xl mx-auto px-6">
                         <nav className="flex gap-1 -mb-px">
                             {TABS.map(t => (
@@ -136,8 +171,25 @@ export default function App() {
                     </div>
                 )}
 
-                {/* Analysis pages */}
-                {data && (
+                {/* Edit Pages (full-page takeover) */}
+                {data && editMode?.type === 'financial' && (
+                    <EditFinancials
+                        statementId={editMode.statementId}
+                        companyName={data.company_name}
+                        onBack={handleEditBack}
+                    />
+                )}
+
+                {data && editMode?.type === 'overview' && (
+                    <EditOverview
+                        data={data}
+                        onBack={() => setEditMode(null)}
+                        onSaved={handleOverviewSaved}
+                    />
+                )}
+
+                {/* Analysis pages (hidden during edit mode) */}
+                {data && !editMode && (
                     <div>
                         {/* Company header */}
                         <div className="mb-8">
@@ -172,8 +224,8 @@ export default function App() {
                         </div>
 
                         {/* Active page */}
-                        {tab === 'overview' && <BusinessOverview data={data} />}
-                        {tab === 'financial' && <FinancialHealth data={data} />}
+                        {tab === 'overview' && <BusinessOverview data={data} onEditClick={handleEditOverview} />}
+                        {tab === 'financial' && <FinancialHealth data={data} onEditClick={handleEditFinancials} />}
                         {tab === 'rating' && <RatingComparison data={data} />}
                     </div>
                 )}
@@ -192,7 +244,6 @@ function normalise(result: any): AnalysisData {
                 }
                 return d;
             })
-            // Always sort oldest → newest so latest = last element
             .sort((a: any, b: any) => a.year - b.year);
     }
     return result;

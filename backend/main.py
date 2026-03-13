@@ -2,13 +2,6 @@
 main.py
 -------
 FastAPI entry point for the DealLens Analysis API.
-
-Endpoints
-─────────
-POST   /api/analyze                Upload PDFs + company name → run pipeline
-GET    /api/analysis/{company}     Get latest completed analysis
-GET    /api/analyses               List all companies with timestamps
-DELETE /api/analysis/{company}     Delete a company and all its runs
 """
 
 import json
@@ -19,41 +12,35 @@ import traceback
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional, List, Dict, Any
 from loguru import logger
 
-# ── Bootstrap logging before anything else ──────────────────────────────────
 from app.logging_config import setup_logging
-
 setup_logging()
 
-# ── Application imports ─────────────────────────────────────────────────────
 from app.config import SERVER_HOST, SERVER_PORT
 from app.database import (
-    create_run,
-    delete_company,
-    get_all_analyses,
-    get_latest_analysis,
-    get_peer_rating,
-    init_db,
-    save_peer_rating,
-    update_run,
-    upsert_company,
-    update_approved_financial_metric,
+    create_run, delete_company, get_all_analyses, get_latest_analysis,
+    get_peer_rating, init_db, save_peer_rating, update_run, upsert_company,
+    get_financial_statements, save_financial_edit, update_line_item,
+    update_metric, recalculate_line_item_percentages, get_statement_by_id,
+    save_overview_edit, get_overview_edits,
+    get_currency_rate, upsert_currency_rate, get_all_currency_rates,
 )
-from app.extractor import run_pipeline
-from app.peer_rating import run_peer_rating
-from app.ratios import enrich_financial_data
-from app.converters.office_to_pdf import convert_to_pdf
+from app.ratios import enrich_financial_data, compute_ratios_from_metrics
+
+# Only import these if they exist (they depend on external APIs)
+try:
+    from app.extractor import run_pipeline
+    from app.peer_rating import run_peer_rating
+    from app.converters.office_to_pdf import convert_to_pdf
+except ImportError:
+    run_pipeline = None
+    run_peer_rating = None
+    convert_to_pdf = None
 
 # ---------------------------------------------------------------------------
-# App factory
-# ---------------------------------------------------------------------------
-
-app = FastAPI(
-    title="DealLens Analysis API",
-    description="AI-Driven M&A Due Diligence – 3-stage Gemini extraction pipeline",
-    version="2.0.0",
-)
+app = FastAPI(title="DealLens Analysis API", version="3.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -63,15 +50,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 @app.on_event("startup")
 def startup_event():
     init_db()
-    logger.info("DealLens API started – listening on {}:{}", SERVER_HOST, SERVER_PORT)
-
+    logger.info("DealLens API started on {}:{}", SERVER_HOST, SERVER_PORT)
 
 # ---------------------------------------------------------------------------
-# Endpoints
+# Analysis Endpoints
 # ---------------------------------------------------------------------------
 
 @app.post("/api/analyze")
@@ -80,20 +65,18 @@ async def analyze_company(
     files: list[UploadFile] = File(...),
     force: bool = Form(False),
 ):
-    """
-    Upload one or more PDF annual reports and run the 3-stage extraction pipeline.
-    If a completed analysis already exists and ``force`` is False, returns the cached result.
-    """
-    logger.info("[API] POST /api/analyze – company='{}', files={}, force={}", company_name, len(files), force)
+    logger.info("[API] POST /api/analyze – company='{}', files={}", company_name, len(files))
 
-    # Return cached result unless force re-analyze is requested
     if not force:
         existing = get_latest_analysis(company_name)
         if existing:
-            logger.info("[API] Returning cached analysis for '{}'", company_name)
+            if "financial_data" in existing:
+                enrich_financial_data(existing["financial_data"])
             return existing
 
-    # Save uploaded files to a temp directory
+    if not run_pipeline or not convert_to_pdf:
+        raise HTTPException(status_code=500, detail="Pipeline not available")
+
     temp_dir = tempfile.mkdtemp()
     file_paths = []
 
@@ -102,22 +85,15 @@ async def analyze_company(
             temp_path = os.path.join(temp_dir, file.filename)
             with open(temp_path, "wb") as f:
                 f.write(await file.read())
-            
-            # Convert Excel/PPT/Word to PDF if necessary
             pdf_path = convert_to_pdf(temp_path, temp_dir)
             file_paths.append(pdf_path)
 
-        # Create DB records
         company_id = upsert_company(company_name)
         run_id = create_run(company_id, status="running")
 
-        # Run the extraction pipeline
         try:
             result_data = run_pipeline(file_paths)
-            logger.info("[API] Pipeline returned {} top-level keys", len(result_data))
         except Exception as exc:
-            error_msg = traceback.format_exc()
-            logger.error("[API] Pipeline failed for '{}':\n{}", company_name, error_msg)
             update_run(run_id, status="failed", error=str(exc))
             raise HTTPException(status_code=500, detail=f"LLM Extraction failed: {exc}")
 
@@ -125,44 +101,21 @@ async def analyze_company(
             update_run(run_id, status="failed", error="Pipeline returned empty result")
             raise HTTPException(status_code=500, detail="Pipeline returned empty result")
 
-        # Extract currency and persist
         currency = result_data.get("currency", "USD")
         update_run(run_id, status="completed", result=result_data, currency=currency)
 
-        # Auto-run 1-5 M&A scoring and cache to peer_ratings table
-        try:
-            logger.info("[API] Auto-running M&A Scoring for '{}'", company_name)
-            
-            # Ensure ratios exist before scoring
-            if "financial_data" in result_data:
-                enrich_financial_data(result_data["financial_data"])
-                
-            result_data["company_name"] = company_name
-            peer_rating_result = run_peer_rating(result_data, [])
-            save_peer_rating(company_name, peer_rating_result)
-        except Exception as exc:
-            logger.error("[API] Auto-scoring failed for '{}':\n{}", company_name, traceback.format_exc())
+        if run_peer_rating:
+            try:
+                if "financial_data" in result_data:
+                    enrich_financial_data(result_data["financial_data"])
+                result_data["company_name"] = company_name
+                peer_rating_result = run_peer_rating(result_data, [])
+                save_peer_rating(company_name, peer_rating_result)
+            except Exception:
+                logger.error("[API] Auto-scoring failed:\n{}", traceback.format_exc())
 
-
-        # Build response (same shape the frontend already expects)
-        response = {
-            "company_name": company_name,
-            "currency": currency,
-            "financial_data": result_data.get("financial_data", []),
-            "anomalies_and_risks": result_data.get("anomalies_and_risks", []),
-            "company_overview": result_data.get("company_overview", {}),
-            "quality_of_it": result_data.get("quality_of_it", {}),
-            "macroeconomic_geo_view": result_data.get("macroeconomic_geo_view", []),
-            "competitive_position": result_data.get("competitive_position", {}),
-            "management_quality": result_data.get("management_quality", []),
-            "data_sources": result_data.get("data_sources", {}),
-        }
-        logger.info("[API] Analysis complete for '{}' – currency='{}', fin_data_years={}",
-                     company_name, currency, len(response["financial_data"]))
-        return response
-
+        return get_latest_analysis(company_name)
     finally:
-        # Clean up temp files
         import shutil
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir, ignore_errors=True)
@@ -170,87 +123,202 @@ async def analyze_company(
 
 @app.get("/api/analysis/{company_name}")
 def get_company_analysis(company_name: str):
-    """Return the latest completed analysis for a company."""
     data = get_latest_analysis(company_name)
     if not data:
         raise HTTPException(status_code=404, detail="Company not found")
-    # Ensure computed ratios exist
     if "financial_data" in data:
         enrich_financial_data(data["financial_data"])
+    # Compute ratios for each financial statement from metrics
+    for stmt in data.get("financial_statements", []):
+        computed = compute_ratios_from_metrics(stmt.get("metrics", {}))
+        stmt["computed_ratios"] = computed
     return data
-
-
-class MetricOverride(BaseModel):
-    year: int
-    metrics: dict
-
-class MetricsOverrideRequest(BaseModel):
-    overrides: list[MetricOverride]
-    username: str = "reviewer"
-
-@app.post("/api/analysis/{company_name}/metrics")
-def override_metrics(company_name: str, request: MetricsOverrideRequest):
-    """
-    Override foundational financial metrics for a company.
-    Calculates derived metrics automatically when retrieving the updated analysis.
-    """
-    analysis = get_latest_analysis(company_name)
-    if not analysis:
-        raise HTTPException(status_code=404, detail="Company analysis not found")
-        
-    run_id = analysis.get("run_id")
-    if not run_id:
-        raise HTTPException(status_code=500, detail="Missing run_id in analysis")
-
-    # Save each overridden metric
-    for override in request.overrides:
-        year = override.year
-        for metric_name, value in override.metrics.items():
-            update_approved_financial_metric(run_id, year, metric_name, value, request.username)
-
-    # Re-fetch the analysis (now with approved metrics overlay)
-    updated_analysis = get_latest_analysis(company_name)
-    if not updated_analysis:
-        raise HTTPException(status_code=500, detail="Failed to retrieve updated analysis")
-        
-    # Recompute derived metrics
-    if "financial_data" in updated_analysis:
-        enrich_financial_data(updated_analysis["financial_data"])
-        
-    return updated_analysis
 
 
 @app.get("/api/analyses")
 def list_all_analyses():
-    """List all companies with their latest analysis timestamp."""
     return get_all_analyses()
 
 
 @app.delete("/api/analysis/{company_name}")
 def delete_company_analysis(company_name: str):
-    """Delete a company and all its analysis runs."""
     deleted = delete_company(company_name)
     if not deleted:
         raise HTTPException(status_code=404, detail="Company not found")
     return {"message": f"Analysis for '{company_name}' deleted successfully"}
 
 
+# ---------------------------------------------------------------------------
+# Financial Edit Endpoints
+# ---------------------------------------------------------------------------
+
+class EditItem(BaseModel):
+    line_item_id: Optional[int] = None
+    metric_name: Optional[str] = None
+    old_value: float
+    new_value: float
+    comment: str
+
+class BulkEditRequest(BaseModel):
+    statement_id: int
+    edits: List[EditItem]
+    username: str = "admin"
+
+@app.post("/api/financial/edit")
+def bulk_edit_financials(request: BulkEditRequest):
+    """Save multiple financial edits at once, then recalculate."""
+    for edit in request.edits:
+        save_financial_edit(
+            statement_id=request.statement_id,
+            line_item_id=edit.line_item_id,
+            metric_name=edit.metric_name,
+            old_value=edit.old_value,
+            new_value=edit.new_value,
+            comment=edit.comment,
+            username=request.username
+        )
+    
+    # Recalculate percentages
+    recalculate_line_item_percentages(request.statement_id)
+    
+    # Recalculate derived metrics
+    stmt = get_statement_by_id(request.statement_id)
+    if stmt:
+        computed = compute_ratios_from_metrics(stmt.get("metrics", {}))
+        stmt["computed_ratios"] = computed
+        return stmt
+    
+    return get_statement_by_id(request.statement_id)
+
+
+@app.get("/api/financial/statement/{statement_id}")
+def get_financial_statement(statement_id: int):
+    stmt = get_statement_by_id(statement_id)
+    if not stmt:
+        raise HTTPException(status_code=404, detail="Statement not found")
+    computed = compute_ratios_from_metrics(stmt.get("metrics", {}))
+    stmt["computed_ratios"] = computed
+    return stmt
+
+
+# ---------------------------------------------------------------------------
+# Overview Edit Endpoints
+# ---------------------------------------------------------------------------
+
+class OverviewEditItem(BaseModel):
+    field_path: str
+    old_value: str
+    new_value: str
+    comment: str
+
+class OverviewEditRequest(BaseModel):
+    run_id: int
+    edits: List[OverviewEditItem]
+    username: str = "admin"
+
+@app.post("/api/overview/edit")
+def edit_overview(request: OverviewEditRequest):
+    for edit in request.edits:
+        save_overview_edit(
+            run_id=request.run_id,
+            field_path=edit.field_path,
+            old_value=edit.old_value,
+            new_value=edit.new_value,
+            comment=edit.comment,
+            username=request.username
+        )
+    return {"status": "ok"}
+
+
+@app.get("/api/overview/edits/{run_id}")
+def get_overview_edits_endpoint(run_id: int):
+    return get_overview_edits(run_id)
+
+
+# ---------------------------------------------------------------------------
+# Currency Rate Endpoints
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/currency-rates")
+def list_currency_rates():
+    return get_all_currency_rates()
+
+
+@app.get("/api/currency-rate/{currency}/{year}")
+def get_rate(currency: str, year: int):
+    rate = get_currency_rate(currency, year)
+    if rate is None:
+        raise HTTPException(status_code=404, detail="Rate not found")
+    return {"currency": currency, "year": year, "rate_to_usd": rate}
+
+
+# ---------------------------------------------------------------------------
+# Comparison Endpoint
+# ---------------------------------------------------------------------------
+
+@app.get("/api/comparison")
+def get_comparison_data():
+    """Get comparison data for all analyzed companies."""
+    analyses = get_all_analyses()
+    result = []
+    
+    for item in analyses:
+        if not item.get("analyzed_at"):
+            continue
+        data = get_latest_analysis(item["company_name"])
+        if not data:
+            continue
+        
+        # Get latest year financial statements
+        stmts = data.get("financial_statements", [])
+        if not stmts:
+            continue
+        
+        latest_stmt = stmts[-1]  # Last = latest year
+        metrics = latest_stmt.get("metrics", {})
+        computed = compute_ratios_from_metrics(metrics)
+        
+        currency = latest_stmt.get("currency", data.get("currency", "USD"))
+        year = latest_stmt.get("year", 0)
+        
+        # Get USD rate
+        rate = get_currency_rate(currency, year)
+        
+        company_data = {
+            "company_name": data["company_name"],
+            "currency": currency,
+            "year": year,
+            "usd_rate": rate,
+            "metrics": metrics,
+            "computed_ratios": computed,
+        }
+        result.append(company_data)
+    
+    # Get all currency rates
+    rates = get_all_currency_rates()
+    
+    return {"companies": result, "currency_rates": rates}
+
+
+# ---------------------------------------------------------------------------
+# Peer Rating Endpoints
+# ---------------------------------------------------------------------------
+
 class PeerRatingRequest(BaseModel):
     peers: list[str] = []
 
 @app.post("/api/peer-rating/{company_name}")
 async def run_peer_rating_endpoint(company_name: str, request: PeerRatingRequest):
-    """
-    Run the peer rating pipeline for a company.
-    Requires an existing completed analysis.
-    """
-    logger.info("[API] POST /api/peer-rating – company='{}'", company_name)
-
+    if not run_peer_rating:
+        raise HTTPException(status_code=500, detail="Peer rating not available")
+    
     analysis = get_latest_analysis(company_name)
     if not analysis:
-        raise HTTPException(status_code=404, detail="No analysis found. Please analyze the company first.")
+        raise HTTPException(status_code=404, detail="No analysis found")
 
-    # Ensure computed ratios exist
     if "financial_data" in analysis:
         enrich_financial_data(analysis["financial_data"])
 
@@ -261,23 +329,18 @@ async def run_peer_rating_endpoint(company_name: str, request: PeerRatingRequest
             if "financial_data" in p_analysis:
                 enrich_financial_data(p_analysis["financial_data"])
             peer_analyses.append(p_analysis)
-        else:
-            logger.warning("[API] Suggested peer '{}' not found in database.", peer_name)
 
     try:
         result = run_peer_rating(analysis, peer_analyses)
     except Exception as exc:
-        logger.error("[API] Peer rating failed for '{}':\n{}", company_name, traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Peer rating failed: {exc}")
 
-    # Persist result
     save_peer_rating(company_name, result)
     return result
 
 
 @app.get("/api/peer-rating/{company_name}")
 def get_peer_rating_endpoint(company_name: str):
-    """Return the cached peer rating for a company."""
     data = get_peer_rating(company_name)
     if not data:
         raise HTTPException(status_code=404, detail="No peer rating found")
@@ -285,9 +348,6 @@ def get_peer_rating_endpoint(company_name: str):
 
 
 # ---------------------------------------------------------------------------
-# Dev server
-# ---------------------------------------------------------------------------
-
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host=SERVER_HOST, port=SERVER_PORT, reload=True)

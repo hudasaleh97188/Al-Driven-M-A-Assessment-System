@@ -1,4 +1,4 @@
-// TypeScript interfaces matching the backend sample_output.json shape
+// TypeScript interfaces matching the backend data shapes
 
 export interface SubsidiaryRevenue {
     subsidiary_or_country: string;
@@ -43,6 +43,7 @@ export interface FinancialHealth {
     gross_non_performing_loans?: number;
     total_loan_loss_provisions?: number;
     total_equity?: number;
+    total_liabilities?: number;
     tier_1_capital?: number;
     risk_weighted_assets?: number;
     disbursals?: number;
@@ -111,12 +112,61 @@ export interface ManagementQuality {
     tenure_history?: string;
 }
 
+// ── Normalized Financial Statement Types ──
+
+export interface FinancialLineItem {
+    id: number;
+    statement_id: number;
+    category: 'Asset' | 'Liability' | 'Equity' | 'Income';
+    item_name: string;
+    value_reported: number | null;
+    size_percent: number | null;
+    change_percent: number | null;
+    absolute_change: number | null;
+    sort_order: number;
+    is_total: number;
+    data_source: string;
+}
+
+export interface FinancialEdit {
+    id: number;
+    statement_id: number;
+    line_item_id: number | null;
+    metric_name: string | null;
+    old_value: number;
+    new_value: number;
+    comment: string;
+    username: string | null;
+    edited_at: string;
+}
+
+export interface FinancialStatement {
+    id: number;
+    analysis_run_id: number;
+    year: number;
+    currency: string | null;
+    line_items: FinancialLineItem[];
+    metrics: Record<string, number>;
+    metrics_detail: Array<{
+        id: number;
+        statement_id: number;
+        metric_name: string;
+        metric_value: number;
+        is_calculated: number;
+        data_source: string;
+    }>;
+    computed_ratios?: Record<string, number>;
+    edit_history: FinancialEdit[];
+}
+
 export interface AnalysisData {
     company_id?: number;
     company_name: string;
     currency: string;
+    run_id?: number;
     company_overview: CompanyOverview;
     financial_data: FinancialDataYear[];
+    financial_statements?: FinancialStatement[];
     anomalies_and_risks: AnomalyRisk[];
     quality_of_it?: QualityOfIT;
     macroeconomic_geo_view?: GeoViewCountry[];
@@ -130,6 +180,7 @@ export interface AnalysisData {
 
 export interface AnalysisListItem {
     company_name: string;
+    industry?: string;
     analyzed_at: string;
 }
 
@@ -176,4 +227,29 @@ export interface PeerRatingResult {
 
 export interface PeerRatingWeights {
     [criterion: string]: number;
+}
+
+// ── Comparison Types ──
+
+export interface ComparisonCompany {
+    company_name: string;
+    currency: string;
+    year: number;
+    usd_rate: number | null;
+    metrics: Record<string, number>;
+    computed_ratios: Record<string, number>;
+}
+
+export interface CurrencyRate {
+    id: number;
+    currency: string;
+    year: number;
+    rate_to_usd: number;
+    updated_by: number | null;
+    updated_at: string;
+}
+
+export interface ComparisonData {
+    companies: ComparisonCompany[];
+    currency_rates: CurrencyRate[];
 }

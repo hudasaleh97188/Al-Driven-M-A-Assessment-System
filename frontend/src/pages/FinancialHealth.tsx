@@ -1,456 +1,465 @@
 import { useState, useMemo } from 'react';
-import { AlertTriangle, Edit3, X, Save } from 'lucide-react';
-import MetricCard from '../components/MetricCard';
-import RiskCard from '../components/RiskCard';
+import { TrendingUp, TrendingDown, Edit3, Briefcase, Activity, ShieldAlert, BarChart2, CreditCard, DollarSign, Percent } from 'lucide-react';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { SourceBadge } from './BusinessOverview';
-import type { AnalysisData } from '../types';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
-import { overrideFinancialMetrics } from '../api';
+import type { AnalysisData, FinancialLineItem } from '../types';
 
-type SubTab = 'overview' | 'balance-sheet' | 'profitability';
+const PIE_COLORS = ['#0d9488', '#0ea5e9', '#f59e0b', '#8b5cf6', '#ef4444', '#22c55e', '#ec4899', '#6366f1'];
 
-// Helper for formatting
-const formatCurrency = (val?: number | null) => {
-    if (val == null) return '—';
-    if (Math.abs(val) >= 1e9) return `${(val / 1e9).toFixed(2)}B`;
-    if (Math.abs(val) >= 1e6) return `${(val / 1e6).toFixed(2)}M`;
-    if (Math.abs(val) >= 1e3) return `${(val / 1e3).toFixed(2)}K`;
-    return val.toLocaleString();
-};
-const formatPct = (val?: number | null) => (val == null ? '—' : `${val.toFixed(1)}%`);
+interface Props {
+    data: AnalysisData;
+    onEditClick?: (statementId: number) => void;
+}
 
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'];
+function fmt(v: number | null | undefined, decimals = 0): string {
+    if (v === null || v === undefined) return 'N/A';
+    const abs = Math.abs(v);
+    if (abs >= 1_000_000) return `${(v / 1_000_000).toFixed(2)}M`;
+    if (abs >= 1_000) return `${(v / 1_000).toFixed(1)}K`;
+    return v.toFixed(decimals);
+}
 
-export default function FinancialHealth({ data: initialData }: { data: AnalysisData }) {
-    const canEdit = true; // Enabled by default as login is removed
-    const [activeTab, setActiveTab] = useState<SubTab>('overview');
-    const [isEditModalOpen, setEditModalOpen] = useState(false);
-    const [isSaving, setIsSaving] = useState(false);
+function fmtFull(v: number | null | undefined): string {
+    if (v === null || v === undefined) return 'N/A';
+    return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
 
-    const [localData, setLocalData] = useState<AnalysisData>(initialData);
+function pctBadge(val: number | null | undefined) {
+    if (val === null || val === undefined) return null;
+    const isUp = val >= 0;
+    return (
+        <span className={`inline-flex items-center gap-0.5 text-xs font-semibold ${isUp ? 'text-emerald-600' : 'text-red-500'}`}>
+            {isUp ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+            {Math.abs(val).toFixed(0)}%
+        </span>
+    );
+}
 
-    const handleSaveEdits = async (year: number, changes: any) => {
-        setIsSaving(true);
-        try {
-            const updated = await overrideFinancialMetrics(localData.company_name, year, changes, 'admin');
-            setLocalData(updated);
-            setEditModalOpen(false);
-        } catch (err) {
-            console.error(err);
-            alert('Failed to save metrics overrides');
-        } finally {
-            setIsSaving(false);
-        }
+export default function FinancialHealth({ data, onEditClick }: Props) {
+    const stmts = data.financial_statements || [];
+    const years = stmts.map(s => s.year).sort((a, b) => a - b);
+    const [selectedYear, setSelectedYear] = useState<number>(years[years.length - 1] || 0);
+
+    const stmt = useMemo(() => stmts.find(s => s.year === selectedYear), [stmts, selectedYear]);
+    const prevStmt = useMemo(() => {
+        const idx = years.indexOf(selectedYear);
+        return idx > 0 ? stmts.find(s => s.year === years[idx - 1]) : undefined;
+    }, [stmts, selectedYear, years]);
+
+    if (!stmt) {
+        return <div className="text-center py-20 text-gray-400">No financial statement data available.</div>;
+    }
+
+    const m = stmt.metrics || {};
+    const r = stmt.computed_ratios || {};
+    const prevM = prevStmt?.metrics || {};
+    const overallSource = stmt.line_items?.[0]?.data_source || stmt.metrics_detail?.[0]?.data_source || 'Files Upload';
+
+    const yoyChange = (key: string) => {
+        const cur = m[key];
+        const prev = prevM[key];
+        if (cur != null && prev != null && prev !== 0) return ((cur - prev) / Math.abs(prev)) * 100;
+        return undefined;
     };
 
-    const financialData = useMemo(() => {
-        const sorted = [...(localData.financial_data || [])].sort((a: any, b: any) => a.year - b.year);
-        return sorted;
-    }, [localData.financial_data]);
-
-    const latest = financialData.length > 0 ? financialData[financialData.length - 1] : null;
+    const assets = stmt.line_items.filter(i => i.category === 'Asset');
+    const liabilities = stmt.line_items.filter(i => i.category === 'Liability');
+    const equities = stmt.line_items.filter(i => i.category === 'Equity');
+    const incomeItems = stmt.line_items.filter(i => i.category === 'Income');
 
     return (
-        <div className="animate-in fade-in duration-500">
-            {/* Sub-navigation & Edit Action */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 bg-white p-2 rounded-xl shadow-sm border border-gray-100">
-                <div className="flex gap-1 p-1 bg-slate-100/50 rounded-lg">
-                    {(['overview', 'balance-sheet', 'profitability'] as SubTab[]).map((t) => (
-                        <button
-                            key={t}
-                            onClick={() => setActiveTab(t)}
-                            className={`px-4 py-2 rounded-md text-sm font-semibold transition-all ${
-                                activeTab === t 
-                                    ? 'bg-white text-blue-600 shadow-sm border border-gray-200/50' 
-                                    : 'text-gray-500 hover:text-gray-900 bg-transparent'
-                            }`}
-                        >
-                            {t === 'overview' ? 'Overview' : t === 'balance-sheet' ? 'Balance Sheet Health' : 'Profitability & Risk'}
-                        </button>
-                    ))}
-                </div>
-
-                {canEdit && (
-                    <button
-                        onClick={() => setEditModalOpen(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-sm font-semibold transition-colors mr-1"
+        <div className="space-y-8">
+            {/* ── Top Controls ── */}
+            <div className="flex items-center justify-end gap-3 mb-6">
+                {years.length > 1 && (
+                    <select
+                        value={selectedYear}
+                        onChange={e => setSelectedYear(Number(e.target.value))}
+                        className="px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium bg-white"
                     >
-                        <Edit3 size={16} />
+                        {years.map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                )}
+                {onEditClick && (
+                    <button
+                        onClick={() => onEditClick(stmt.id)}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm"
+                    >
+                        <Edit3 size={14} />
                         Edit Metrics
                     </button>
                 )}
             </div>
 
-            {/* Content Views */}
-            <div className="min-h-[500px]">
-                {activeTab === 'overview' && <OverviewTab fd={financialData} data={localData} />}
-                {activeTab === 'balance-sheet' && <BalanceSheetTab latest={latest} />}
-                {activeTab === 'profitability' && <ProfitabilityTab latest={latest} />}
-            </div>
-
-            {/* Edit Modal */}
-            {isEditModalOpen && (
-                <EditModal 
-                    fd={financialData} 
-                    onClose={() => setEditModalOpen(false)} 
-                    onSave={handleSaveEdits} 
-                    isSaving={isSaving}
-                />
-            )}
-        </div>
-    );
-}
-
-// ----------------------------------------------------------------------
-// OVERVIEW TAB (Original UI)
-// ----------------------------------------------------------------------
-function OverviewTab({ fd, data }: { fd: any[], data: AnalysisData }) {
-    const latest = fd.length > 0 ? fd[fd.length - 1] : null;
-    const first = fd.length > 0 ? fd[0] : null;
-    const lf = latest?.financial_health;
-    const ff = first?.financial_health;
-    const risks = data.anomalies_and_risks ?? [];
-    const latYear = latest?.year;
-    const firstYear = first?.year;
-
-    const pctDelta = (a?: number, b?: number) => a !== undefined && b !== undefined && b !== 0 ? ((a - b) / Math.abs(b)) * 100 : undefined;
-    const ppDelta = (a?: number, b?: number) => a !== undefined && b !== undefined ? a - b : undefined;
-    const chartOf = (key: string) => fd.map(d => ({ name: d.year, val: (d.financial_health as any)?.[key] ?? null }));
-
-    return (
-        <div className="space-y-8 animate-in fade-in duration-300">
+            {/* ── Balance Sheet Health ── */}
             <section>
-                <SectionBar color="bg-blue-500" title={`Absolute Health${latYear ? ` (${latYear})` : ''}`} />
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                    <MetricCard title="Total Operating Revenue" value={lf?.total_operating_revenue} delta={pctDelta(lf?.total_operating_revenue, ff?.total_operating_revenue)} chartData={chartOf('total_operating_revenue')} baselineYear={firstYear} latestYear={latYear} badge={<SourceBadge source="Files Upload" />} />
-                    <MetricCard title="EBITDA" value={lf?.ebitda} delta={pctDelta(lf?.ebitda, ff?.ebitda)} chartData={chartOf('ebitda')} baselineYear={firstYear} latestYear={latYear} badge={<SourceBadge source="Files Upload" />} />
-                    <MetricCard title="PAT (Net Income)" value={lf?.pat} delta={pctDelta(lf?.pat, ff?.pat)} chartData={chartOf('pat')} baselineYear={firstYear} latestYear={latYear} badge={<SourceBadge source="Files Upload" />} />
-                    <MetricCard title="Total Equity" value={lf?.total_equity} delta={pctDelta(lf?.total_equity, ff?.total_equity)} chartData={chartOf('total_equity')} baselineYear={firstYear} latestYear={latYear} badge={<SourceBadge source="Files Upload" />} />
-                    <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col justify-between relative">
-                        <div className="absolute top-2 right-2"><SourceBadge source="Files Upload" /></div>
-                        <h3 className="text-gray-400 uppercase tracking-wider text-[11px] font-semibold mb-2">Credit Rating</h3>
-                        <div className="text-xl font-bold text-gray-900 leading-tight">{lf?.credit_rating || 'N/A'}</div>
-                    </div>
+                <div className="flex justify-between items-center mb-5">
+                    <SectionHeader icon={<Briefcase size={16} />} title="Balance Sheet Health" color="blue" noMargin />
+                    <SourceBadge source={overallSource} />
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                    <KPICard icon={<DollarSign size={18} />} label="Total Assets" value={fmt(m.total_assets)} change={yoyChange('total_assets')} />
+                    <KPICard icon={<DollarSign size={18} />} label="Total Liabilities" value={fmt(m.total_liabilities)} change={yoyChange('total_liabilities')} />
+                    <KPICard icon={<Briefcase size={18} />} label="Total Equity" value={fmt(m.total_equity)} change={yoyChange('total_equity')} />
+                    <KPICard icon={<Percent size={18} />} label="ROA" value={r.roa_percent != null ? `${r.roa_percent}%` : 'N/A'} />
+                    <KPICard icon={<Percent size={18} />} label="ROE" value={r.roe_percent != null ? `${r.roe_percent}%` : 'N/A'} />
+                    <KPICard icon={<Percent size={18} />} label="Deposits to Asset" value={r.deposits_to_assets_percent != null ? `${r.deposits_to_assets_percent}%` : 'N/A'} />
                 </div>
             </section>
 
-            <section>
-                <SectionBar color="bg-violet-500" title={`Profitability & Returns${latYear ? ` (${latYear})` : ''}`} />
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <MetricCard title="Profit Margin" value={lf?.profit_margin_percent} isRatio delta={ppDelta(lf?.profit_margin_percent, ff?.profit_margin_percent)} chartData={chartOf('profit_margin_percent')} baselineYear={firstYear} latestYear={latYear} badge={<SourceBadge source="Calculated" />} />
-                    <MetricCard title="Cost-to-Income" value={lf?.cost_to_income_ratio_percent} isRatio isNegativeGood delta={ppDelta(lf?.cost_to_income_ratio_percent, ff?.cost_to_income_ratio_percent)} chartData={chartOf('cost_to_income_ratio_percent')} baselineYear={firstYear} latestYear={latYear} badge={<SourceBadge source="Calculated" />} />
-                    <MetricCard title="ROE" value={lf?.roe_percent} isRatio badge={<SourceBadge source="Calculated" />} />
-                    <MetricCard title="ROA" value={lf?.roa_percent} isRatio badge={<SourceBadge source="Calculated" />} />
-                </div>
-            </section>
-
-            {risks.length > 0 && (
-                <section>
-                    <div className="flex items-center gap-2.5 mb-5">
-                        <div className="w-7 h-7 rounded-lg bg-red-100 text-red-500 flex items-center justify-center">
-                            <AlertTriangle className="w-4 h-4" />
-                        </div>
-                        <h3 className="text-lg font-bold text-gray-900">Identified Risks & Anomalies</h3>
-                    </div>
-                    <div className="space-y-4">
-                        {risks.map((r, i) => <RiskCard key={i} risk={r} />)}
-                    </div>
-                </section>
-            )}
-        </div>
-    );
-}
-
-// ----------------------------------------------------------------------
-// BALANCE SHEET TAB (PowerBI Style)
-// ----------------------------------------------------------------------
-function BalanceSheetTab({ latest }: { latest: any }) {
-    const lf = latest?.financial_health || {};
-
-    // Common-size pie data mock logic
-    const assetPie = [
-        { name: 'Loans & Advances', value: lf.gross_loan_portfolio || (lf.total_assets * 0.5) || 50 },
-        { name: 'Cash/Due from banks', value: (lf.total_assets * 0.15) || 15 },
-        { name: 'Investments', value: (lf.total_assets * 0.25) || 25 },
-        { name: 'Other Assets', value: (lf.total_assets * 0.1) || 10 },
-    ].filter(d => d.value > 0);
-
-    return (
-        <div className="space-y-6 animate-in fade-in duration-300">
-            {/* Top KPIs */}
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-                <MiniKpi title="Total Assets" value={formatCurrency(lf.total_assets)} badge={<SourceBadge source="Files Upload" />} />
-                <MiniKpi title="Total Liabilities" value={formatCurrency(lf.total_liabilities || (lf.total_assets - lf.total_equity))} badge={<SourceBadge source="Files Upload" />} />
-                <MiniKpi title="Total Equity" value={formatCurrency(lf.total_equity)} badge={<SourceBadge source="Files Upload" />} />
-                <MiniKpi title="Return on Assets (ROA)" value={formatPct(lf.roa_percent)} badge={<SourceBadge source="Calculated" />} />
-                <MiniKpi title="Return on Equity (ROE)" value={formatPct(lf.roe_percent)} badge={<SourceBadge source="Calculated" />} />
-                <MiniKpi title="Deposits to Assets" value={formatPct(lf.deposits_to_assets_percent || 81)} badge={<SourceBadge source="Calculated" />} />
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <div className="lg:col-span-7 space-y-6">
-                    <DataTable 
+            {/* ── Balance Sheet: Assets ── */}
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                <div className="lg:col-span-3">
+                    <LineItemTable
                         title="Asset Line Items"
-                        headers={['Asset Line Item', 'Value', 'Asset Size %']}
-                        rows={[
-                            ['Loans and advances', formatCurrency(lf.gross_loan_portfolio || (lf.total_assets * 0.5)), '50%'],
-                            ['Due from banks', formatCurrency(lf.total_assets * 0.15), '15%'],
-                            ['Financial investments', formatCurrency(lf.total_assets * 0.25), '25%'],
-                            ['Other assets', formatCurrency(lf.total_assets * 0.10), '10%'],
-                        ]}
-                        total={formatCurrency(lf.total_assets)}
-                        badge={<SourceBadge source="Files Upload" />}
+                        items={assets}
+                        sizeLabel="Asset Size %"
                     />
-                    <DataTable 
+                </div>
+                <div className="lg:col-span-2">
+                    <CommonSizePie title="Assets Common-Size Analysis" items={assets} />
+                </div>
+            </div>
+
+            {/* ── Balance Sheet: Liabilities ── */}
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                <div className="lg:col-span-3">
+                    <LineItemTable
                         title="Liabilities Line Items"
-                        headers={['Liability Line Item', 'Value', 'Liability Size %']}
-                        rows={[
-                            ['Customers\' deposits', formatCurrency(lf.total_assets * 0.70), '91%'],
-                            ['Due to banks', formatCurrency(lf.total_assets * 0.05), '6%'],
-                            ['Other provisions', formatCurrency(lf.total_assets * 0.02), '3%'],
-                        ]}
-                        total={formatCurrency(lf.total_liabilities || (lf.total_assets - lf.total_equity))}
-                        badge={<SourceBadge source="Files Upload" />}
+                        items={liabilities}
+                        sizeLabel="Liability Size %"
                     />
                 </div>
-                
-                <div className="lg:col-span-5 space-y-6">
-                    <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm h-[320px] flex flex-col relative">
-                        <div className="absolute top-4 right-4 z-10"><SourceBadge source="Calculated" /></div>
-                        <h3 className="text-gray-900 font-bold mb-4">Assets Common-Size Analysis</h3>
-                        <div className="flex-1 min-h-0">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie data={assetPie} innerRadius={60} outerRadius={90} paddingAngle={2} dataKey="value">
-                                        {assetPie.map((_, i) => <Cell key={`cell-${i}`} fill={COLORS[i % COLORS.length]} />)}
-                                    </Pie>
-                                    <RechartsTooltip formatter={(val: any) => formatCurrency(val ?? 0)} />
-                                </PieChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
+                <div className="lg:col-span-2">
+                    <CommonSizePie title="Liabilities Common-Size Analysis" items={liabilities} />
                 </div>
             </div>
-        </div>
-    );
-}
 
-// ----------------------------------------------------------------------
-// PROFITABILITY & RISK TAB (PowerBI Style)
-// ----------------------------------------------------------------------
-function ProfitabilityTab({ latest }: { latest: any }) {
-    const lf = latest?.financial_health || {};
-
-    return (
-        <div className="space-y-6 animate-in fade-in duration-300">
-            {/* Top KPIs */}
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-                <MiniKpi title="Total Operating Income" value={formatCurrency(lf.total_operating_revenue)} badge={<SourceBadge source="Files Upload" />} />
-                <MiniKpi title="Net Interest Income" value={formatCurrency(lf.net_interests)} badge={<SourceBadge source="Files Upload" />} />
-                <MiniKpi title="Net Income" value={formatCurrency(lf.pat)} badge={<SourceBadge source="Files Upload" />} />
-                <MiniKpi title="Net Interest Margin" value={formatPct(lf.nim_percent)} badge={<SourceBadge source="Calculated" />} />
-                <MiniKpi title="Cost to Income Ratio" value={formatPct(lf.cost_to_income_ratio_percent)} badge={<SourceBadge source="Calculated" />} />
-                <MiniKpi title="Capital Adequacy Ratio" value={formatPct(lf.car_percent || 18.99)} badge={<SourceBadge source="Calculated" />} />
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <div className="lg:col-span-8">
-                    <DataTable 
-                        title="Income Statement Line Items"
-                        headers={['Item', 'Value', 'Size %']}
-                        rows={[
-                            ['Interest from loans', formatCurrency(lf.total_operating_revenue * 0.8), '120%'],
-                            ['Cost of deposits', formatCurrency(lf.total_operating_revenue * -0.2), '-30%'],
-                            ['Net interest income', formatCurrency(lf.net_interests), '90%'],
-                            ['Fees and commissions', formatCurrency(lf.total_operating_revenue * 0.1), '10%'],
-                            ['Administrative expenses', formatCurrency(lf.total_operating_expenses), '-45%'],
-                        ]}
-                        badge={<SourceBadge source="Files Upload" />}
+            {/* ── Balance Sheet: Equity ── */}
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                <div className="lg:col-span-3">
+                    <LineItemTable
+                        title="Equity Line Items"
+                        items={equities}
+                        sizeLabel="Equity Size %"
                     />
                 </div>
-                
-                <div className="lg:col-span-4 space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <RiskBox title="Loan-to-Deposit Ratio" value={formatPct(lf.ldr_percent || 61.54)} badge={<SourceBadge source="Calculated" />} />
-                        <RiskBox title="Non-Performing Loan" value={formatPct(lf.gnpa_percent || 1.79)} badge={<SourceBadge source="Files Upload" />} />
-                        <RiskBox title="Provision Coverage" value={formatPct(lf.provision_coverage_percent || 85)} badge={<SourceBadge source="Calculated" />} />
-                        <RiskBox title="Liquidity Coverage" value={formatPct(lf.lcr_percent || 140)} badge={<SourceBadge source="Calculated" />} />
+                <div className="lg:col-span-2">
+                    <CommonSizePie title="Equity Common-Size Analysis" items={equities} />
+                </div>
+            </div>
+
+            {/* ── Profitability & Risk ── */}
+            <section>
+                <SectionHeader icon={<TrendingUp size={16} />} title="Profitability & Risk" color="emerald" />
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                    <KPICard icon={<DollarSign size={18} />} label="Op. Income" value={fmt(m.total_operating_revenue)} change={yoyChange('total_operating_revenue')} />
+                    <KPICard icon={<DollarSign size={18} />} label="Net Interest Inv." value={fmt(m.net_interests)} change={yoyChange('net_interests')} />
+                    <KPICard icon={<DollarSign size={18} />} label="Net Income" value={fmt(m.pat)} change={yoyChange('pat')} />
+                    <KPICard icon={<Percent size={18} />} label="Net Int. Margin" value={r.nim_percent != null ? `${r.nim_percent}%` : 'N/A'} />
+                    <KPICard icon={<BarChart2 size={18} />} label="Int. Coverage" value={r.interest_coverage_ratio != null ? `${r.interest_coverage_ratio}x` : 'N/A'} />
+                    <KPICard icon={<Percent size={18} />} label="Cost to Income" value={r.cost_to_income_ratio_percent != null ? `${r.cost_to_income_ratio_percent}%` : 'N/A'} />
+                </div>
+            </section>
+
+            {/* ── Income Statement + Ratios ── */}
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                <div className="lg:col-span-3">
+                    <IncomeTable items={incomeItems} />
+                </div>
+                <div className="lg:col-span-2 space-y-3">
+                    <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-2">Key Ratios</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                        <RatioCard label="Loan-to-Deposit Ratio" value={r.loan_to_deposit_percent} suffix="%" />
+                        <RatioCard label="Capital Adequacy Ratio" value={r.capital_adequacy_percent} suffix="%" />
+                        <RatioCard label="Non-Performing Loan Ratio" value={r.npl_percent} suffix="%" />
+                        <RatioCard label="Liquidity Coverage Ratio" value={r.equity_to_glp_percent} suffix="%" />
+                        <RatioCard label="Provision Coverage Ratio" value={r.provision_coverage_percent} suffix="%" />
+                        <RatioCard label="Loans-to-Assets Ratio" value={r.loans_to_assets_percent} suffix="%" />
+                        <RatioCard label="Net Interest Margin" value={r.nim_percent} suffix="%" />
+                        <RatioCard label="Cost to Income Ratio" value={r.cost_to_income_ratio_percent} suffix="%" />
+                        <RatioCard label="Interest Coverage" value={r.interest_coverage_ratio} suffix="x" />
+                        <RatioCard label="Profit Margin" value={r.profit_margin_percent} suffix="%" />
                     </div>
                 </div>
+            </div>
+
+            {/* ── Loan Book ── */}
+            <section>
+                <SectionHeader icon={<CreditCard size={16} />} title="Loan Book" color="violet" />
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                    <KPICard icon={<Briefcase size={18} />} label="Gross Loan Portfolio" value={fmt(m.gross_loan_portfolio)} change={yoyChange('gross_loan_portfolio')} />
+                    <KPICard icon={<ShieldAlert size={18} />} label="Credit Rating" value={m.credit_rating || 'N/A'} />
+                    <KPICard icon={<BarChart2 size={18} />} label="Deposits / Borrowings" value={m.debts_to_clients != null && m.debts_to_financial_institutions != null ? `${fmt(m.debts_to_clients)} / ${fmt(m.debts_to_financial_institutions)}` : 'N/A'} />
+                    <KPICard icon={<Percent size={18} />} label="PAR 30 (6%)" value={m.loans_with_arrears_over_30_days != null && m.gross_loan_portfolio ? `${((m.loans_with_arrears_over_30_days / m.gross_loan_portfolio) * 100).toFixed(1)}%` : 'N/A'} />
+                    <KPICard icon={<DollarSign size={18} />} label="Disbursals" value={fmt(m.disbursals)} change={yoyChange('disbursals')} />
+                    <KPICard icon={<Percent size={18} />} label="GLP / Equity" value={m.equity_to_glp_percent != null ? `${(100 / m.equity_to_glp_percent * 100).toFixed(1)}%` : (m.gross_loan_portfolio && m.total_equity ? `${(m.gross_loan_portfolio / m.total_equity).toFixed(1)}%` : 'N/A')} />
+                </div>
+            </section>
+
+            {/* ── Risks & Anomalies ── */}
+            {data.anomalies_and_risks && data.anomalies_and_risks.length > 0 && (
+                <div>
+                    <SectionHeader icon={<ShieldAlert size={16} />} title="Identified Risks & Anomalies" color="rose" />
+                    <div className="space-y-3">
+                        {data.anomalies_and_risks.map((risk, i) => (
+                            <div key={i} className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
+                                <div className="flex items-start justify-between mb-2">
+                                    <h4 className="font-semibold text-gray-900">{risk.category}</h4>
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                        risk.severity_level === 'High' ? 'bg-red-100 text-red-700' :
+                                        risk.severity_level === 'Medium' ? 'bg-amber-100 text-amber-700' :
+                                        'bg-green-100 text-green-700'
+                                    }`}>{risk.severity_level}</span>
+                                </div>
+                                <p className="text-sm text-gray-600 mb-3">{risk.description}</p>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                                    <div className="bg-gray-50 rounded-lg p-3">
+                                        <span className="font-semibold text-gray-500 uppercase tracking-wider">Valuation Impact</span>
+                                        <p className="mt-1 text-gray-700">{risk.valuation_impact}</p>
+                                    </div>
+                                    <div className="bg-gray-50 rounded-lg p-3">
+                                        <span className="font-semibold text-gray-500 uppercase tracking-wider">Negotiation Leverage</span>
+                                        <p className="mt-1 text-gray-700">{risk.negotiation_leverage}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* ── Edit History ── */}
+            {stmt.edit_history && stmt.edit_history.length > 0 && (
+                <div>
+                    <h3 className="text-lg font-bold text-gray-900 mb-4">Edit History</h3>
+                    <div className="bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="bg-gray-50 border-b border-gray-100">
+                                    <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase">Field</th>
+                                    <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase">Old Value</th>
+                                    <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase">New Value</th>
+                                    <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase">Comment</th>
+                                    <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase">User</th>
+                                    <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                                {stmt.edit_history.map(edit => (
+                                    <tr key={edit.id} className="hover:bg-gray-50/50">
+                                        <td className="px-4 py-2 text-gray-700 font-medium">{edit.metric_name || `Line Item #${edit.line_item_id}`}</td>
+                                        <td className="px-4 py-2 text-right text-gray-500">{fmtFull(edit.old_value)}</td>
+                                        <td className="px-4 py-2 text-right text-gray-900 font-semibold">{fmtFull(edit.new_value)}</td>
+                                        <td className="px-4 py-2 text-gray-600 max-w-xs truncate">{edit.comment}</td>
+                                        <td className="px-4 py-2 text-gray-500">{edit.username || 'N/A'}</td>
+                                        <td className="px-4 py-2 text-gray-400 text-xs">{edit.edited_at}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+/* ── Sub-components ── */
+
+function SectionHeader({ icon, title, color, noMargin = false }: { icon: React.ReactNode; title: string; color: string, noMargin?: boolean }) {
+    const colorMap: Record<string, string> = {
+        blue: 'bg-blue-100 text-blue-600',
+        violet: 'bg-violet-100 text-violet-600',
+        emerald: 'bg-emerald-100 text-emerald-600',
+        cyan: 'bg-cyan-100 text-cyan-600',
+        orange: 'bg-orange-100 text-orange-600',
+        rose: 'bg-rose-100 text-rose-600',
+        teal: 'bg-teal-100 text-teal-600',
+    };
+    return (
+        <div className={`flex items-center gap-2.5 ${noMargin ? '' : 'mb-5'}`}>
+            <div className={`w-7 h-7 rounded-lg ${colorMap[color] ?? colorMap.blue} flex items-center justify-center`}>{icon}</div>
+            <h3 className="text-lg font-bold text-gray-900">{title}</h3>
+        </div>
+    );
+}
+
+function KPICard({ label, value, change, icon }: { label: string; value: string | number; change?: number; icon?: React.ReactNode }) {
+    return (
+        <div className="bg-white rounded-2xl p-4 pb-8 border border-gray-100 shadow-sm flex items-center gap-3 relative">
+            {change !== undefined && (
+                <div className="absolute bottom-2 right-2 z-10">{pctBadge(change)}</div>
+            )}
+            <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center flex-shrink-0">
+                {icon || <Activity size={18} />}
+            </div>
+            <div>
+                <div className="text-xl font-bold text-gray-900 truncate max-w-[120px]">{value}</div>
+                <div className="text-[11px] text-gray-400 font-medium uppercase tracking-wider">{label}</div>
             </div>
         </div>
     );
 }
 
-// ----------------------------------------------------------------------
-// EDIT MODAL FOR REVIEWERS
-// ----------------------------------------------------------------------
-function EditModal({ fd, onClose, onSave, isSaving }: { fd: any[], onClose: () => void, onSave: (year: number, data: any) => void, isSaving: boolean }) {
-    // We select the latest year by default
-    const latestYear = fd[fd.length - 1]?.year;
-    const [selectedYear, setSelectedYear] = useState(latestYear);
-    
-    const yearData = fd.find(d => d.year === selectedYear)?.financial_health || {};
-    
-    // State for the editable foundational fields
-    const [formData, setFormData] = useState({
-        total_assets: yearData.total_assets || '',
-        total_liabilities: yearData.total_liabilities || '',
-        total_equity: yearData.total_equity || '',
-        total_operating_revenue: yearData.total_operating_revenue || '',
-        total_operating_expenses: yearData.total_operating_expenses || '',
-        pat: yearData.pat || '',
-        net_interests: yearData.net_interests || '',
-    });
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setFormData(f => ({ ...f, [e.target.name]: e.target.value === '' ? '' : Number(e.target.value) }));
-    };
-
-    const handleSave = () => {
-        onSave(selectedYear, formData);
-    };
+function LineItemTable({ title, items, sizeLabel }: { title: string; items: FinancialLineItem[]; sizeLabel: string }) {
+    const nonTotal = items.filter(i => !i.is_total);
+    const totalRow = items.find(i => i.is_total);
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-200">
-                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-                    <div>
-                        <h2 className="text-lg font-bold text-slate-900">Edit Foundational Metrics</h2>
-                        <p className="text-xs text-slate-500 mt-0.5">Calculated ratios will update automatically. Changes are saved to <code>financial_metrics_approved</code>.</p>
-                    </div>
-                    <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded-full transition-colors">
-                        <X size={20} />
-                    </button>
-                </div>
-
-                <div className="p-6">
-                    <div className="mb-6 flex items-center gap-3">
-                        <label className="text-sm font-semibold text-slate-700">Reporting Year:</label>
-                        <select 
-                            value={selectedYear} 
-                            onChange={(e) => {
-                                const y = Number(e.target.value);
-                                setSelectedYear(y);
-                                const newYData = fd.find(d => d.year === y)?.financial_health || {};
-                                setFormData({
-                                    total_assets: newYData.total_assets || '',
-                                    total_liabilities: newYData.total_liabilities || '',
-                                    total_equity: newYData.total_equity || '',
-                                    total_operating_revenue: newYData.total_operating_revenue || '',
-                                    total_operating_expenses: newYData.total_operating_expenses || '',
-                                    pat: newYData.pat || '',
-                                    net_interests: newYData.net_interests || '',
-                                });
-                            }}
-                            className="bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2"
-                        >
-                            {fd.map(d => <option key={d.year} value={d.year}>{d.year}</option>)}
-                        </select>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                        <Field label="Total Assets" name="total_assets" val={formData.total_assets} onChange={handleChange} />
-                        <Field label="Total Liabilities" name="total_liabilities" val={formData.total_liabilities} onChange={handleChange} />
-                        <Field label="Total Equity" name="total_equity" val={formData.total_equity} onChange={handleChange} />
-                        <Field label="Total Op. Revenue" name="total_operating_revenue" val={formData.total_operating_revenue} onChange={handleChange} />
-                        <Field label="Total Op. Expenses" name="total_operating_expenses" val={formData.total_operating_expenses} onChange={handleChange} />
-                        <Field label="Net Income (PAT)" name="pat" val={formData.pat} onChange={handleChange} />
-                        <Field label="Net Interests" name="net_interests" val={formData.net_interests} onChange={handleChange} />
-                    </div>
-                </div>
-
-                <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50">
-                    <button onClick={onClose} disabled={isSaving} className="px-4 py-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-50">Cancel</button>
-                    <button onClick={handleSave} disabled={isSaving} className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 shadow-md shadow-blue-500/20 transition-colors disabled:opacity-50">
-                        <Save size={16} /> {isSaving ? 'Saving...' : 'Save Overrides'}
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function Field({ label, name, val, onChange }: any) {
-    return (
-        <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">{label}</label>
-            <input 
-                type="number" 
-                name={name} 
-                value={val} 
-                onChange={onChange}
-                className="w-full bg-white border border-slate-200 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none transition-shadow hover:shadow-sm focus:shadow-sm"
-                placeholder="Raw Value..."
-            />
-        </div>
-    );
-}
-
-// ----------------------------------------------------------------------
-// Reusable Sub-components
-// ----------------------------------------------------------------------
-function SectionBar({ color, title }: { color: string; title: string }) {
-    return (
-        <h2 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center">
-            <div className={`w-1 h-4 ${color} mr-2 rounded`} />{title}
-        </h2>
-    );
-}
-
-function MiniKpi({ title, value, badge }: { title: string, value: string | number, badge?: React.ReactNode }) {
-    return (
-        <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] text-center flex flex-col justify-center min-h-[100px] relative">
-            {badge && <div className="absolute top-2 right-2 scale-75 origin-top-right">{badge}</div>}
-            <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2 leading-tight">{title}</div>
-            <div className="text-xl font-bold text-slate-900">{value}</div>
-        </div>
-    );
-}
-
-function RiskBox({ title, value, badge }: { title: string, value: string | number, badge?: React.ReactNode }) {
-    return (
-        <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] flex flex-col items-center justify-center text-center relative">
-            {badge && <div className="absolute top-2 right-2 scale-75 origin-top-right">{badge}</div>}
-            <div className="text-xs font-bold text-slate-500 mb-2">{title}</div>
-            <div className="text-2xl font-black text-slate-900">{value}</div>
-        </div>
-    );
-}
-
-function DataTable({ title, headers, rows, total, badge }: { title: string, headers: string[], rows: any[][], total?: string, badge?: React.ReactNode }) {
-    return (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden relative">
-            <div className="px-5 py-4 border-b border-gray-100 bg-slate-50/50 flex justify-between items-center">
-                <h3 className="font-bold text-slate-900">{title}</h3>
-                {badge && <div className="scale-90 origin-right">{badge}</div>}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 bg-teal-700">
+                <h3 className="text-sm font-bold text-white">{title}</h3>
             </div>
             <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm whitespace-nowrap">
+                <table className="w-full text-sm">
                     <thead>
-                        <tr className="border-b border-gray-100 text-slate-400 text-xs uppercase tracking-wider">
-                            {headers.map((h, i) => <th key={i} className={`p-4 font-semibold ${i > 0 ? 'text-right' : ''}`}>{h}</th>)}
+                        <tr className="bg-teal-50 border-b border-teal-100">
+                            <th className="text-left px-4 py-2.5 text-[10px] font-bold text-teal-800 uppercase tracking-wider">{title.replace(' Line Items', ' Line Item')}</th>
+                            <th className="text-right px-4 py-2.5 text-[10px] font-bold text-teal-800 uppercase tracking-wider">Value</th>
+                            <th className="text-right px-4 py-2.5 text-[10px] font-bold text-teal-800 uppercase tracking-wider">{sizeLabel}</th>
+                            <th className="text-right px-4 py-2.5 text-[10px] font-bold text-teal-800 uppercase tracking-wider">% Change</th>
+                            <th className="text-right px-4 py-2.5 text-[10px] font-bold text-teal-800 uppercase tracking-wider">Absolute Change</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                        {rows.map((row, i) => (
-                            <tr key={i} className="hover:bg-slate-50 transition-colors">
-                                {row.map((cell, j) => (
-                                    <td key={j} className={`p-4 ${j === 0 ? 'font-medium text-slate-700' : 'text-right font-semibold text-slate-900'}`}>
-                                        {cell}
-                                    </td>
-                                ))}
+                        {nonTotal.map(item => (
+                            <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
+                                <td className="px-4 py-2.5 text-gray-700 font-medium text-[13px]">{item.item_name}</td>
+                                <td className="px-4 py-2.5 text-right text-gray-900 font-semibold tabular-nums">{fmtFull(item.value_reported)}</td>
+                                <td className="px-4 py-2.5 text-right text-gray-600 tabular-nums">{item.size_percent != null ? `${item.size_percent}%` : ''}</td>
+                                <td className="px-4 py-2.5 text-right">{pctBadge(item.change_percent)}</td>
+                                <td className={`px-4 py-2.5 text-right tabular-nums font-medium ${(item.absolute_change || 0) < 0 ? 'text-red-500' : 'text-gray-700'}`}>
+                                    {fmtFull(item.absolute_change)}
+                                </td>
                             </tr>
                         ))}
-                        {total && (
-                            <tr className="bg-slate-50/80 font-bold border-t-2 border-slate-100">
-                                <td className="p-4 text-slate-900">Total</td>
-                                <td className="p-4 text-right text-slate-900">{total}</td>
-                                <td className="p-4 text-right text-slate-900">100%</td>
-                            </tr>
-                        )}
                     </tbody>
+                    {totalRow && (
+                        <tfoot>
+                            <tr className="bg-teal-50 border-t-2 border-teal-200 font-bold">
+                                <td className="px-4 py-2.5 text-teal-800">Total</td>
+                                <td className="px-4 py-2.5 text-right text-teal-900 tabular-nums">{fmtFull(totalRow.value_reported)}</td>
+                                <td className="px-4 py-2.5 text-right text-teal-700">{totalRow.size_percent != null ? `${totalRow.size_percent}%` : ''}</td>
+                                <td className="px-4 py-2.5 text-right">{pctBadge(totalRow.change_percent)}</td>
+                                <td className="px-4 py-2.5 text-right text-teal-900 tabular-nums">{fmtFull(totalRow.absolute_change)}</td>
+                            </tr>
+                        </tfoot>
+                    )}
                 </table>
+            </div>
+        </div>
+    );
+}
+
+function IncomeTable({ items }: { items: FinancialLineItem[] }) {
+    const nonTotal = items.filter(i => !i.is_total);
+    const totalRow = items.find(i => i.is_total);
+
+    return (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 bg-teal-700">
+                <h3 className="text-sm font-bold text-white">Income Statement Line Items</h3>
+            </div>
+            <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                    <thead>
+                        <tr className="bg-teal-50 border-b border-teal-100">
+                            <th className="text-left px-4 py-2.5 text-[10px] font-bold text-teal-800 uppercase tracking-wider">Income Statement Line Item</th>
+                            <th className="text-right px-4 py-2.5 text-[10px] font-bold text-teal-800 uppercase tracking-wider">Value</th>
+                            <th className="text-right px-4 py-2.5 text-[10px] font-bold text-teal-800 uppercase tracking-wider">Size %</th>
+                            <th className="text-right px-4 py-2.5 text-[10px] font-bold text-teal-800 uppercase tracking-wider">% Change</th>
+                            <th className="text-right px-4 py-2.5 text-[10px] font-bold text-teal-800 uppercase tracking-wider">Absolute Change</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                        {nonTotal.map(item => (
+                            <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
+                                <td className="px-4 py-2.5 text-gray-700 font-medium text-[13px]">{item.item_name}</td>
+                                <td className={`px-4 py-2.5 text-right font-semibold tabular-nums ${(item.value_reported || 0) < 0 ? 'text-red-500' : 'text-gray-900'}`}>
+                                    {fmtFull(item.value_reported)}
+                                </td>
+                                <td className="px-4 py-2.5 text-right text-gray-600 tabular-nums">{item.size_percent != null ? `${item.size_percent}%` : ''}</td>
+                                <td className="px-4 py-2.5 text-right">{pctBadge(item.change_percent)}</td>
+                                <td className={`px-4 py-2.5 text-right tabular-nums font-medium ${(item.absolute_change || 0) < 0 ? 'text-red-500' : 'text-gray-700'}`}>
+                                    {fmtFull(item.absolute_change)}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                    {totalRow && (
+                        <tfoot>
+                            <tr className="bg-teal-50 border-t-2 border-teal-200 font-bold">
+                                <td className="px-4 py-2.5 text-teal-800">{totalRow.item_name}</td>
+                                <td className="px-4 py-2.5 text-right text-teal-900 tabular-nums">{fmtFull(totalRow.value_reported)}</td>
+                                <td className="px-4 py-2.5 text-right text-teal-700">{totalRow.size_percent != null ? `${totalRow.size_percent}%` : ''}</td>
+                                <td className="px-4 py-2.5 text-right">{pctBadge(totalRow.change_percent)}</td>
+                                <td className="px-4 py-2.5 text-right text-teal-900 tabular-nums">{fmtFull(totalRow.absolute_change)}</td>
+                            </tr>
+                        </tfoot>
+                    )}
+                </table>
+            </div>
+        </div>
+    );
+}
+
+function CommonSizePie({ title, items }: { title: string; items: FinancialLineItem[] }) {
+    const pieData = items
+        .filter(i => !i.is_total && i.value_reported && i.value_reported > 0)
+        .map(i => ({
+            name: i.item_name,
+            value: i.value_reported || 0,
+            pct: i.size_percent || 0,
+        }));
+
+    if (pieData.length === 0) return null;
+
+    return (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-col h-full">
+            <h3 className="text-sm font-bold text-gray-700 mb-4">{title}</h3>
+            <div className="flex-1 min-h-[280px]">
+                <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                        <Pie
+                            data={pieData}
+                            cx="50%"
+                            cy="45%"
+                            outerRadius={90}
+                            innerRadius={40}
+                            dataKey="value"
+                            nameKey="name"
+                            paddingAngle={2}
+                            label={({ pct }: any) => `${pct.toFixed(1)}%`}
+                            labelLine={true}
+                        >
+                            {pieData.map((_, i) => (
+                                <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                            ))}
+                        </Pie>
+                        <Tooltip
+                            formatter={(v: any, name: any) => [fmtFull(Number(v)), String(name)]}
+                            contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }}
+                        />
+                        <Legend
+                            verticalAlign="bottom"
+                            iconType="circle"
+                            iconSize={8}
+                            wrapperStyle={{ fontSize: '11px', paddingTop: '12px' }}
+                        />
+                    </PieChart>
+                </ResponsiveContainer>
+            </div>
+        </div>
+    );
+}
+
+function RatioCard({ label, value, suffix = '' }: { label: string; value?: number | null; suffix?: string }) {
+    return (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:shadow-md transition-shadow">
+            <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">{label}</div>
+            <div className="text-lg font-bold text-gray-900">
+                {value != null ? `${value}${suffix}` : <span className="text-gray-300">(Blank)</span>}
             </div>
         </div>
     );

@@ -20,7 +20,7 @@ const CustomXAxisTick = ({ x, y, payload }: any) => {
     );
 };
 
-export default function BusinessOverview({ data }: { data: AnalysisData }) {
+export default function BusinessOverview({ data, onEditClick }: { data: AnalysisData; onEditClick?: () => void }) {
     const ov = data.company_overview;
     const mgmt = data.management_quality ?? [];
     const partners = ov?.strategic_partners ?? [];
@@ -48,6 +48,19 @@ export default function BusinessOverview({ data }: { data: AnalysisData }) {
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
+            {/* Edit Button */}
+            {onEditClick && (
+                <div className="flex justify-end">
+                    <button
+                        onClick={onEditClick}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm"
+                    >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                        Edit Overview
+                    </button>
+                </div>
+            )}
+
             {/* ──── Product & Market Reach ──── */}
             <section>
                 <SectionHeader icon={<Globe className="w-4 h-4" />} title="Product Offerings & Market Reach" color="blue" />
@@ -72,7 +85,7 @@ export default function BusinessOverview({ data }: { data: AnalysisData }) {
                             <div className="absolute top-4 right-4">{getSourceBadge("countries_of_operation")}</div>
                             <h4 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Countries of Operation</h4>
                             <div className="flex flex-wrap gap-2">
-                                {ov.countries_of_operation.map(c => (
+                                {(Array.isArray(ov.countries_of_operation) ? ov.countries_of_operation : typeof ov.countries_of_operation === 'string' ? (ov.countries_of_operation as string).split(',').map(s=>s.trim()) : []).map(c => (
                                     <span key={c} className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-full text-xs font-medium border border-blue-100">
                                         <MapPin className="w-3 h-3 inline mr-1 -mt-0.5" />{c}
                                     </span>
