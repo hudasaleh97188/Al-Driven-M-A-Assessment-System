@@ -35,6 +35,15 @@ _SHAREHOLDER_ITEM = {
     "required": ["name"],
 }
 
+_FINANCIAL_LINE_ITEM = {
+    "type": "OBJECT",
+    "properties": {
+        "item_name":      {"type": "STRING"},
+        "value_reported": {"type": "NUMBER"},
+    },
+    "required": ["item_name", "value_reported"],
+}
+
 COMPANY_OVERVIEW_SCHEMA = {
     "type": "OBJECT",
     "description": (
@@ -150,6 +159,30 @@ _FINANCIAL_DATA_ITEM = {
                 "total_equity": {
                     "type": "NUMBER",
                     "description": "Company's accounting net worth (assets minus liabilities).",
+                },
+                "total_liabilities": {
+                    "type": "NUMBER",
+                    "description": "Total liabilities reported (base currency units).",
+                },
+                "asset_line_items": {
+                    "type": "ARRAY",
+                    "description": "Detailed line items under Assets (e.g., Cash, PPE).",
+                    "items": _FINANCIAL_LINE_ITEM,
+                },
+                "liabilities_line_items": {
+                    "type": "ARRAY",
+                    "description": "Detailed line items under Liabilities (e.g., Accounts Payable, Debt).",
+                    "items": _FINANCIAL_LINE_ITEM,
+                },
+                "equity_line_items": {
+                    "type": "ARRAY",
+                    "description": "Detailed line items under Equity (e.g., Share Capital, Retained Earnings).",
+                    "items": _FINANCIAL_LINE_ITEM,
+                },
+                "income_statement_line_items": {
+                    "type": "ARRAY",
+                    "description": "Detailed line items under the Income Statement (e.g., OPEX, Taxes).",
+                    "items": _FINANCIAL_LINE_ITEM,
                 },
                 "disbursals": {
                     "type": "NUMBER",

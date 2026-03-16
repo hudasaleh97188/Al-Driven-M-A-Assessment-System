@@ -62,6 +62,12 @@ export interface FinancialHealth {
     equity_to_glp_percent?: number;
     depositors_vs_borrowers_ratio?: number;
     total_loan_outstanding?: number;
+
+    // Grouped Line Items
+    asset_line_items?: Array<{ item_name: string; value_reported: number }>;
+    liabilities_line_items?: Array<{ item_name: string; value_reported: number }>;
+    equity_line_items?: Array<{ item_name: string; value_reported: number }>;
+    income_statement_line_items?: Array<{ item_name: string; value_reported: number }>;
 }
 
 export interface FinancialDataYear {
@@ -120,9 +126,6 @@ export interface FinancialLineItem {
     category: 'Asset' | 'Liability' | 'Equity' | 'Income';
     item_name: string;
     value_reported: number | null;
-    size_percent: number | null;
-    change_percent: number | null;
-    absolute_change: number | null;
     sort_order: number;
     is_total: number;
     data_source: string;

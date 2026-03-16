@@ -173,30 +173,51 @@ export default function FinancialHealth({ data, onEditClick }: Props) {
             {/* ── Balance Sheet: Assets ── */}
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                 <div className="lg:col-span-3">
-                    <LineItemTable title="Asset Line Items" items={assets} sizeLabel="Asset Size %" source={getLineItemsSource(assets)} />
+                    <LineItemTable 
+                        title="Asset Line Items" 
+                        items={assets} 
+                        prevItems={prevStmt?.line_items.filter((i: FinancialLineItem) => i.category === 'Asset') || []}
+                        sizeLabel="Asset Size %" 
+                        source={getLineItemsSource(assets)} 
+                        denominator={m.total_assets || 0} 
+                    />
                 </div>
                 <div className="lg:col-span-2">
-                    <CommonSizePie title="Assets Common-Size Analysis" items={assets} source={getLineItemsSource(assets)} />
+                    <CommonSizePie title="Assets Common-Size Analysis" items={assets} source={getLineItemsSource(assets)} denominator={m.total_assets || 0} />
                 </div>
             </div>
 
             {/* ── Balance Sheet: Liabilities ── */}
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                 <div className="lg:col-span-3">
-                    <LineItemTable title="Liabilities Line Items" items={liabilities} sizeLabel="Liability Size %" source={getLineItemsSource(liabilities)} />
+                    <LineItemTable 
+                        title="Liabilities Line Items" 
+                        items={liabilities} 
+                        prevItems={prevStmt?.line_items.filter((i: FinancialLineItem) => i.category === 'Liability') || []}
+                        sizeLabel="Liability Size %" 
+                        source={getLineItemsSource(liabilities)} 
+                        denominator={(m.total_liabilities || 0) + (m.total_equity || 0)} 
+                    />
                 </div>
                 <div className="lg:col-span-2">
-                    <CommonSizePie title="Liabilities Common-Size Analysis" items={liabilities} source={getLineItemsSource(liabilities)} />
+                    <CommonSizePie title="Liabilities Common-Size Analysis" items={liabilities} source={getLineItemsSource(liabilities)} denominator={(m.total_liabilities || 0) + (m.total_equity || 0)} />
                 </div>
             </div>
 
             {/* ── Balance Sheet: Equity ── */}
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                 <div className="lg:col-span-3">
-                    <LineItemTable title="Equity Line Items" items={equities} sizeLabel="Equity Size %" source={getLineItemsSource(equities)} />
+                    <LineItemTable 
+                        title="Equity Line Items" 
+                        items={equities} 
+                        prevItems={prevStmt?.line_items.filter((i: FinancialLineItem) => i.category === 'Equity') || []}
+                        sizeLabel="Equity Size %" 
+                        source={getLineItemsSource(equities)} 
+                        denominator={(m.total_liabilities || 0) + (m.total_equity || 0)} 
+                    />
                 </div>
                 <div className="lg:col-span-2">
-                    <CommonSizePie title="Equity Common-Size Analysis" items={equities} source={getLineItemsSource(equities)} />
+                    <CommonSizePie title="Equity Common-Size Analysis" items={equities} source={getLineItemsSource(equities)} denominator={(m.total_liabilities || 0) + (m.total_equity || 0)} />
                 </div>
             </div>
 
@@ -213,20 +234,25 @@ export default function FinancialHealth({ data, onEditClick }: Props) {
                 </div>
             </section>
 
-            {/* ── Income Statement + Key Ratios ── */}
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                 <div className="lg:col-span-3">
-                    <IncomeTable items={incomeItems} source={getLineItemsSource(incomeItems)} />
+                    <IncomeTable 
+                        items={incomeItems} 
+                        prevItems={prevStmt?.line_items.filter((i: FinancialLineItem) => i.category === 'Income') || []}
+                        source={getLineItemsSource(incomeItems)} 
+                        denominator={m.total_operating_revenue || 0} 
+                    />
                 </div>
-                <div className="lg:col-span-2 space-y-3">
-                    <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-2">Key Ratios</h3>
-                    <div className="grid grid-cols-2 gap-3">
-                        <MetricCard title="Loan-to-Deposit" value={r.loan_to_deposit_percent} delta={yoyChange('loan_to_deposit_percent', true)} isRatio badge={ratioBadge('gross_loan_portfolio', 'debts_to_clients')} />
-                        <MetricCard title="Capital Adequacy" value={r.capital_adequacy_percent} delta={yoyChange('capital_adequacy_percent', true)} isRatio badge={ratioBadge('total_equity', 'total_assets')} />
-                        <MetricCard title="Non-Performing Loan" value={r.npl_percent} delta={yoyChange('npl_percent', true)} isRatio isNegativeGood badge={ratioBadge('gross_non_performing_loans', 'gross_loan_portfolio')} />
-                        <MetricCard title="Liquidity Coverage" value={r.equity_to_glp_percent} delta={yoyChange('equity_to_glp_percent', true)} isRatio badge={ratioBadge('total_equity', 'gross_loan_portfolio')} />
-                        <MetricCard title="Provision Coverage" value={r.provision_coverage_percent} delta={yoyChange('provision_coverage_percent', true)} isRatio badge={ratioBadge('loan_loss_provisions', 'gross_non_performing_loans')} />
-                        <MetricCard title="Loans-to-Assets" value={r.loans_to_assets_percent} delta={yoyChange('loans_to_assets_percent', true)} isRatio badge={ratioBadge('gross_loan_portfolio', 'total_assets')} />
+                <div className="lg:col-span-2">
+                    <div className="space-y-3">
+                        <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-2">Key Ratios</h3>
+                        <div className="grid grid-cols-2 gap-3">
+                            <MetricCard title="Loan-to-Deposit" value={r.loan_to_deposit_percent} delta={yoyChange('loan_to_deposit_percent', true)} isRatio badge={ratioBadge('gross_loan_portfolio', 'debts_to_clients')} />
+                            <MetricCard title="Capital Adequacy" value={r.capital_adequacy_percent} delta={yoyChange('capital_adequacy_percent', true)} isRatio badge={ratioBadge('total_equity', 'total_assets')} />
+                            <MetricCard title="Non-Performing Loan" value={r.npl_percent} delta={yoyChange('npl_percent', true)} isRatio isNegativeGood badge={ratioBadge('gross_non_performing_loans', 'gross_loan_portfolio')} />
+                            <MetricCard title="Liquidity Coverage" value={r.equity_to_glp_percent} delta={yoyChange('equity_to_glp_percent', true)} isRatio badge={ratioBadge('total_equity', 'gross_loan_portfolio')} />
+                            <MetricCard title="Provision Coverage" value={r.provision_coverage_percent} delta={yoyChange('provision_coverage_percent', true)} isRatio badge={ratioBadge('loan_loss_provisions', 'gross_non_performing_loans')} />
+                        </div>
                     </div>
                 </div>
             </div>
@@ -308,9 +334,12 @@ function SectionHeader({ icon, title, color }: { icon: React.ReactNode; title: s
 }
 
 
-function LineItemTable({ title, items, sizeLabel, source }: { title: string; items: FinancialLineItem[]; sizeLabel: string; source: string }) {
+function LineItemTable({ title, items, prevItems, sizeLabel, source, denominator }: { title: string; items: FinancialLineItem[]; prevItems: FinancialLineItem[]; sizeLabel: string; source: string; denominator: number }) {
     const nonTotal = items.filter(i => !i.is_total);
     const totalRow = items.find(i => i.is_total);
+
+    // Find corresponding total in prevItems
+    const prevTotalRow = prevItems.find(i => i.is_total);
 
     return (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
@@ -330,26 +359,44 @@ function LineItemTable({ title, items, sizeLabel, source }: { title: string; ite
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                        {nonTotal.map(item => (
-                            <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
-                                <td className="px-4 py-2.5 text-gray-700 font-medium text-[13px]">{item.item_name}</td>
-                                <td className="px-4 py-2.5 text-right text-gray-900 font-semibold tabular-nums">{fmtCompact(item.value_reported)}</td>
-                                <td className="px-4 py-2.5 text-right text-gray-500 tabular-nums">{item.size_percent != null ? `${item.size_percent}%` : <span className="text-gray-300">—</span>}</td>
-                                <td className="px-4 py-2.5 text-right">{pctBadge(item.change_percent)}</td>
-                                <td className={`px-4 py-2.5 text-right tabular-nums font-medium ${(item.absolute_change || 0) < 0 ? 'text-red-500' : 'text-gray-600'}`}>
-                                    {item.absolute_change != null ? fmtCompact(item.absolute_change) : <span className="text-gray-300">—</span>}
-                                </td>
-                            </tr>
-                        ))}
+                        {nonTotal.map((item, idx) => {
+                            const pct = denominator !== 0 ? ((item.value_reported || 0) / denominator) * 100 : 0;
+                            // Find matching item in prevYear
+                            const prevItem = prevItems.find(p => p.item_name === item.item_name);
+                            const absChange = (item.value_reported || 0) - (prevItem?.value_reported || 0);
+                            const chgPct = (prevItem?.value_reported && prevItem.value_reported !== 0) 
+                                ? (absChange / Math.abs(prevItem.value_reported)) * 100 
+                                : undefined;
+
+                            return (
+                                <tr key={item.id || idx} className="hover:bg-gray-50/50 transition-colors">
+                                    <td className="px-4 py-2.5 text-gray-700 font-medium text-[13px]">{item.item_name}</td>
+                                    <td className="px-4 py-2.5 text-right text-gray-900 font-semibold tabular-nums">{fmtCompact(item.value_reported)}</td>
+                                    <td className="px-4 py-2.5 text-right text-gray-500 tabular-nums">{denominator !== 0 ? `${pct.toFixed(1)}%` : <span className="text-gray-300">—</span>}</td>
+                                    <td className="px-4 py-2.5 text-right">{pctBadge(chgPct)}</td>
+                                    <td className="px-4 py-2.5 text-right text-gray-400 tabular-nums text-xs">{prevItem ? fmtCompact(absChange) : ''}</td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                     {totalRow && (
                         <tfoot>
                             <tr className="bg-teal-50 border-t-2 border-teal-200 font-bold">
                                 <td className="px-4 py-2.5 text-teal-800">Total</td>
                                 <td className="px-4 py-2.5 text-right text-teal-900 tabular-nums">{fmtCompact(totalRow.value_reported)}</td>
-                                <td className="px-4 py-2.5 text-right text-teal-700">{totalRow.size_percent != null ? `${totalRow.size_percent}%` : ''}</td>
-                                <td className="px-4 py-2.5 text-right">{pctBadge(totalRow.change_percent)}</td>
-                                <td className="px-4 py-2.5 text-right text-teal-900 tabular-nums">{totalRow.absolute_change != null ? fmtCompact(totalRow.absolute_change) : ''}</td>
+                                <td className="px-4 py-2.5 text-right text-teal-700">{denominator !== 0 ? '100.0%' : ''}</td>
+                                <td className="px-4 py-2.5 text-right">
+                                    {(() => {
+                                        const absChange = (totalRow.value_reported || 0) - (prevTotalRow?.value_reported || 0);
+                                        const chgPct = (prevTotalRow?.value_reported && prevTotalRow.value_reported !== 0) 
+                                            ? (absChange / Math.abs(prevTotalRow.value_reported)) * 100 
+                                            : undefined;
+                                        return pctBadge(chgPct);
+                                    })()}
+                                </td>
+                                <td className="px-4 py-2.5 text-right text-teal-900 tabular-nums">
+                                    {prevTotalRow ? fmtCompact((totalRow.value_reported || 0) - (prevTotalRow.value_reported || 0)) : ''}
+                                </td>
                             </tr>
                         </tfoot>
                     )}
@@ -360,9 +407,10 @@ function LineItemTable({ title, items, sizeLabel, source }: { title: string; ite
 }
 
 
-function IncomeTable({ items, source }: { items: FinancialLineItem[]; source: string }) {
+function IncomeTable({ items, prevItems, source, denominator }: { items: FinancialLineItem[]; prevItems: FinancialLineItem[]; source: string; denominator: number }) {
     const nonTotal = items.filter(i => !i.is_total);
     const totalRow = items.find(i => i.is_total);
+    const prevTotalRow = prevItems.find(i => i.is_total);
 
     return (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
@@ -382,28 +430,43 @@ function IncomeTable({ items, source }: { items: FinancialLineItem[]; source: st
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                        {nonTotal.map(item => (
-                            <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
-                                <td className="px-4 py-2.5 text-gray-700 font-medium text-[13px]">{item.item_name}</td>
-                                <td className={`px-4 py-2.5 text-right font-semibold tabular-nums ${(item.value_reported || 0) < 0 ? 'text-red-500' : 'text-gray-900'}`}>
-                                    {fmtCompact(item.value_reported)}
-                                </td>
-                                <td className="px-4 py-2.5 text-right text-gray-500 tabular-nums">{item.size_percent != null ? `${item.size_percent}%` : <span className="text-gray-300">—</span>}</td>
-                                <td className="px-4 py-2.5 text-right">{pctBadge(item.change_percent)}</td>
-                                <td className={`px-4 py-2.5 text-right tabular-nums font-medium ${(item.absolute_change || 0) < 0 ? 'text-red-500' : 'text-gray-600'}`}>
-                                    {item.absolute_change != null ? fmtCompact(item.absolute_change) : <span className="text-gray-300">—</span>}
-                                </td>
-                            </tr>
-                        ))}
+                        {nonTotal.map((item, idx) => {
+                            const pct = denominator !== 0 ? ((item.value_reported || 0) / denominator) * 100 : 0;
+                            const prevItem = prevItems.find(p => p.item_name === item.item_name);
+                            const absChange = (item.value_reported || 0) - (prevItem?.value_reported || 0);
+                            const chgPct = (prevItem?.value_reported && prevItem.value_reported !== 0) 
+                                ? (absChange / Math.abs(prevItem.value_reported)) * 100 
+                                : undefined;
+
+                            return (
+                                <tr key={item.id || idx} className="hover:bg-gray-50/50 transition-colors">
+                                    <td className="px-4 py-2.5 text-gray-700 font-medium text-[13px]">{item.item_name}</td>
+                                    <td className={`px-4 py-2.5 text-right font-semibold tabular-nums ${(item.value_reported || 0) < 0 ? 'text-red-500' : 'text-gray-900'}`}>{fmtCompact(item.value_reported)}</td>
+                                    <td className="px-4 py-2.5 text-right text-gray-500 tabular-nums">{denominator !== 0 ? `${pct.toFixed(1)}%` : <span className="text-gray-300">—</span>}</td>
+                                    <td className="px-4 py-2.5 text-right">{pctBadge(chgPct)}</td>
+                                    <td className="px-4 py-2.5 text-right text-gray-400 tabular-nums text-xs">{prevItem ? fmtCompact(absChange) : ''}</td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                     {totalRow && (
                         <tfoot>
                             <tr className="bg-teal-50 border-t-2 border-teal-200 font-bold">
                                 <td className="px-4 py-2.5 text-teal-800">{totalRow.item_name}</td>
                                 <td className="px-4 py-2.5 text-right text-teal-900 tabular-nums">{fmtCompact(totalRow.value_reported)}</td>
-                                <td className="px-4 py-2.5 text-right text-teal-700">{totalRow.size_percent != null ? `${totalRow.size_percent}%` : ''}</td>
-                                <td className="px-4 py-2.5 text-right">{pctBadge(totalRow.change_percent)}</td>
-                                <td className="px-4 py-2.5 text-right text-teal-900 tabular-nums">{totalRow.absolute_change != null ? fmtCompact(totalRow.absolute_change) : ''}</td>
+                                <td className="px-4 py-2.5 text-right text-teal-700">{denominator !== 0 ? '100.0%' : ''}</td>
+                                <td className="px-4 py-2.5 text-right">
+                                    {(() => {
+                                        const absChange = (totalRow.value_reported || 0) - (prevTotalRow?.value_reported || 0);
+                                        const chgPct = (prevTotalRow?.value_reported && prevTotalRow.value_reported !== 0) 
+                                            ? (absChange / Math.abs(prevTotalRow.value_reported)) * 100 
+                                            : undefined;
+                                        return pctBadge(chgPct);
+                                    })()}
+                                </td>
+                                <td className="px-4 py-2.5 text-right text-teal-900 tabular-nums">
+                                    {prevTotalRow ? fmtCompact((totalRow.value_reported || 0) - (prevTotalRow.value_reported || 0)) : ''}
+                                </td>
                             </tr>
                         </tfoot>
                     )}
@@ -414,14 +477,17 @@ function IncomeTable({ items, source }: { items: FinancialLineItem[]; source: st
 }
 
 
-function CommonSizePie({ title, items, source }: { title: string; items: FinancialLineItem[]; source: string }) {
+function CommonSizePie({ title, items, source, denominator }: { title: string; items: FinancialLineItem[]; source: string; denominator: number }) {
     const pieData = items
         .filter((i: FinancialLineItem) => !i.is_total && i.value_reported && i.value_reported > 0)
-        .map((i: FinancialLineItem) => ({
-            name: i.item_name,
-            value: i.value_reported || 0,
-            pct: i.size_percent || 0,
-        }));
+        .map((i: FinancialLineItem) => {
+            const pct = denominator !== 0 ? ((i.value_reported || 0) / denominator) * 100 : 0;
+            return {
+                name: i.item_name,
+                value: i.value_reported || 0,
+                pct,
+            };
+        });
 
     if (pieData.length === 0) return null;
 

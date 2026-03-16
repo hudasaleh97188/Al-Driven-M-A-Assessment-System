@@ -88,9 +88,6 @@ CREATE TABLE IF NOT EXISTS financial_line_items (
     category        TEXT NOT NULL CHECK(category IN ('Asset','Liability','Equity','Income')),
     item_name       TEXT NOT NULL,
     value_reported  REAL,
-    size_percent    REAL,
-    change_percent  REAL,
-    absolute_change REAL,
     sort_order      INTEGER DEFAULT 0,
     is_total        BOOLEAN DEFAULT 0,
     data_source     TEXT DEFAULT 'Files Upload'
@@ -314,6 +311,29 @@ def _save_normalized_financial_data(
                     # credit_rating is a string — skip numeric insert
                     pass
 
+        # ── Grouped Line Items ─────────────────────────────────────────────
+        # Assets, Liabilities, Equity, and Income Statement line items.
+        line_item_groups = {
+            "asset_line_items": "Asset",
+            "liabilities_line_items": "Liability",
+            "equity_line_items": "Equity",
+            "income_statement_line_items": "Income"
+        }
+
+        for schema_key, db_category in line_item_groups.items():
+            items = fh.get(schema_key, [])
+            if not isinstance(items, list):
+                continue
+                
+            for itm in items:
+                name = itm.get("item_name")
+                val = itm.get("value_reported")
+                if name and val is not None:
+                    conn.execute("""
+                        INSERT INTO financial_line_items (statement_id, category, item_name, value_reported)
+                        VALUES (?, ?, ?, ?)
+                    """, (stmt_id, db_category, name, val))
+
         logger.debug(
             "[DB_WRITE] Saved financial_statement run_id={} year={} stmt_id={}",
             run_id, year, stmt_id,
@@ -509,18 +529,6 @@ def recalculate_line_item_percentages(statement_id: int) -> None:
             conn.execute(
                 "UPDATE financial_line_items SET value_reported = ? WHERE id = ?",
                 (total_val, total_row["id"]),
-            )
-
-            for item in items:
-                pct = (item["value_reported"] / total_val * 100) if total_val != 0 else 0
-                conn.execute(
-                    "UPDATE financial_line_items SET size_percent = ? WHERE id = ?",
-                    (round(pct, 2), item["id"]),
-                )
-
-            conn.execute(
-                "UPDATE financial_line_items SET size_percent = 100.0 WHERE id = ?",
-                (total_row["id"],),
             )
 
         conn.commit()

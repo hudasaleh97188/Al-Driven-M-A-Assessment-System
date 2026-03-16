@@ -62,13 +62,20 @@ Extract values for ALL years present in the reports.
    - Gross Non-Performing Loans / NPL (loans >90 days past due)
    - Total Loan Loss Provisions
    - Total Equity
+   - Total Liabilities
+
+   Extract detailed line items into the following arrays:
+   - Asset Line Items: e.g., Cash, Receivables, PPE, Intangibles.
+   - Liabilities Line Items: e.g., Accounts Payable, Short-term Debt, Long-term Debt.
+   - Equity Line Items: e.g., Share Capital, Retained Earnings.
+   - Income Statement Line Items: e.g., COGS, Operating Expenses, Taxes, Net Income.
 
    - Disbursals (loans disbursed during the year)
    - Debts to clients (customer deposits)
    - Debts to financial institutions (borrowings)
    - Credit Rating (Group-level issuer rating. If only a subsidiary or instrument rating exists, prefix with the entity name, e.g. "Baobab Nigeria: BBB+". If no rating exists, return null.)
 
-   NOTE: Calculate metrics that require arithmetic. If a value cannot be found or calculated, return null.
+   NOTE: Capture all major line items as reported in the documents. Do not hallucinate categories; use the exact names as found. Eliminate scale (thousands/millions) as per the normalization rules.
 
 === SECTION 2: RISK DETECTION FRAMEWORK ===
 
