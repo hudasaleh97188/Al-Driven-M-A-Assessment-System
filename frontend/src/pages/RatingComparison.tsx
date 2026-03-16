@@ -4,9 +4,19 @@ import {
     ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid,
     Line, ComposedChart, Legend, Cell, Bar,
 } from 'recharts';
-import { ShieldAlert, Play, Loader2, Trophy, Target, BarChart3, Settings2, UserPlus, X, DollarSign, Edit3 } from 'lucide-react';
-import { runPeerRating, fetchPeerRating, fetchAnalyses, fetchComparison, setCurrencyRate } from '../api';
+import { ShieldAlert, Play, Loader2, Trophy, Target, BarChart3, Settings2, UserPlus, X, DollarSign } from 'lucide-react';
+import { runPeerRating, fetchPeerRating, fetchAnalyses, fetchComparison } from '../api';
+import { computeRatios } from '../utils/computeRatios';
 import type { AnalysisData, PeerRatingResult, CriterionScore, AnalysisListItem, ComparisonData } from '../types';
+
+/* ── Compact number formatter ── */
+function fmtCompact(v: number): string {
+    const abs = Math.abs(v);
+    if (abs >= 1_000_000_000) return `${(v / 1_000_000_000).toFixed(2)}B`;
+    if (abs >= 1_000_000) return `${(v / 1_000_000).toFixed(2)}M`;
+    if (abs >= 1_000) return `${(v / 1_000).toFixed(1)}K`;
+    return v.toFixed(2);
+}
 
 /* ── colour helpers (1–5 scale) ── */
 const scoreColor = (s: number) =>
@@ -81,20 +91,9 @@ const METRIC_TIERS = [
     },
 ];
 
-type SubTab = 'rating' | 'comparison';
-
 interface Props {
     data: AnalysisData;
 }
-
-function fmtUSD(v: number | null | undefined): string {
-    if (v === null || v === undefined || isNaN(v)) return 'N/A';
-    const abs = Math.abs(v);
-    if (abs >= 1_000_000) return `${(v / 1_000_000).toFixed(2)}`;
-    if (abs >= 1_000) return `${(v / 1_000).toFixed(2)}`;
-    return v.toFixed(2);
-}
-
 
 
 export default function RatingComparison({ data }: Props) {
@@ -114,8 +113,9 @@ export default function RatingComparison({ data }: Props) {
     );
 }
 
+
 /* ══════════════════════════════════════════════════════════════════════
-   RATING TAB (existing M&A Rating functionality with Comparison merged)
+   RATING TAB
    ══════════════════════════════════════════════════════════════════════ */
 
 function RatingTab({ data, compData, loadingComp }: { data: AnalysisData, compData: ComparisonData | null, loadingComp: boolean }) {
@@ -248,8 +248,8 @@ function RatingTab({ data, compData, loadingComp }: { data: AnalysisData, compDa
                         Run the rating to score {data.company_name} on {CRITERIA_ORDER.length} M&A attractiveness criteria.
                     </p>
                     <PeerSelector availableCompanies={availableCompanies} selectedPeers={selectedPeers} peerDropdownOpen={peerDropdownOpen} setPeerDropdownOpen={setPeerDropdownOpen} addPeer={addPeer} removePeer={removePeer} />
-                    <button onClick={() => handleRun()} disabled={loading} className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-blue-500/20 transition-all disabled:opacity-50 mt-4">
-                        <Play className="w-4 h-4" />
+                    <button onClick={() => handleRun()} disabled={loading} className="inline-flex items-center gap-2 px-6 py-2.5 mt-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm disabled:opacity-50">
+                        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
                         Run Rating{selectedPeers.length > 0 ? ` (+ ${selectedPeers.length} peers)` : ''}
                     </button>
                 </div>
@@ -416,7 +416,7 @@ function RatingTab({ data, compData, loadingComp }: { data: AnalysisData, compDa
                             <Radar name={targetName} dataKey={targetName} stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.15} strokeWidth={2} animationDuration={800} animationEasing="ease-out" />
                             {hasPeers && <Radar name="Peer Average" dataKey="Peer Average" stroke="#9ca3af" fill="#9ca3af" fillOpacity={0.08} strokeWidth={1.5} strokeDasharray="4 4" animationDuration={1000} animationEasing="ease-out" animationBegin={200} />}
                             <Legend wrapperStyle={{ fontSize: 12, fontWeight: 600 }} iconType="square" />
-                            <Tooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '12px', padding: '8px 12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                            <Tooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '11px', padding: '6px 10px', boxShadow: '0 4px 12px -2px rgb(0 0 0 / 0.08)' }} />
                         </RadarChart>
                     </ResponsiveContainer>
                 </div>
@@ -464,9 +464,14 @@ function RatingTab({ data, compData, loadingComp }: { data: AnalysisData, compDa
                                                 {companyNames.map(name => {
                                                     const score = getScore(name, criterion);
                                                     const detail = getScoreDetail(name, criterion);
+                                                    const hasData = score > 0;
                                                     return (
                                                         <td key={name} className="px-4 py-3 text-center relative group">
-                                                            <span className="inline-flex items-center justify-center w-10 h-7 rounded-md text-xs font-bold text-white relative z-10" style={{ backgroundColor: scoreColor(score) }}>{score}</span>
+                                                            {hasData ? (
+                                                                <span className="inline-flex items-center justify-center w-10 h-7 rounded-md text-xs font-bold text-white relative z-10" style={{ backgroundColor: scoreColor(score) }}>{score}</span>
+                                                            ) : (
+                                                                <span className="inline-flex items-center justify-center w-10 h-7 rounded-md text-xs font-semibold text-gray-400 bg-gray-100 relative z-10">N/A</span>
+                                                            )}
                                                             {detail && (detail.justification || detail.sub_scores) && (
                                                                 <div className={`absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-max max-w-sm bg-white border border-slate-200 text-slate-900 text-[12px] rounded-lg p-3 shadow-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[100]`}>
                                                                     {detail.justification && <p className="mb-2 font-medium text-slate-600 leading-relaxed text-left">{detail.justification}</p>}
@@ -493,10 +498,15 @@ function RatingTab({ data, compData, loadingComp }: { data: AnalysisData, compDa
                                     const overall = computeWeightedScore(name);
                                     const tier1Avg = getTierAverage(name, METRIC_TIERS[0].metrics);
                                     const failedGating = name === targetName && tier1Avg <= 3;
+                                    const hasData = overall > 0;
                                     return (
                                         <td key={name} className="px-4 py-3 text-center">
                                             <div className="flex flex-col items-center">
-                                                <span className="text-base font-extrabold" style={{ color: failedGating ? '#ef4444' : scoreColor(overall) }}>{overall.toFixed(1)}</span>
+                                                {hasData ? (
+                                                    <span className="text-base font-extrabold" style={{ color: failedGating ? '#ef4444' : scoreColor(overall) }}>{overall.toFixed(1)}</span>
+                                                ) : (
+                                                    <span className="text-base font-semibold text-gray-400">N/A</span>
+                                                )}
                                                 {failedGating && <span className="text-[8px] font-bold text-red-500 uppercase">Flagged</span>}
                                             </div>
                                         </td>
@@ -507,6 +517,7 @@ function RatingTab({ data, compData, loadingComp }: { data: AnalysisData, compDa
                     </table>
                 </div>
             </div>
+
             {/* Profitability Chart */}
             <ProfitabilityChart companies={companies} targetName={targetName} />
 
@@ -526,7 +537,7 @@ function RatingTab({ data, compData, loadingComp }: { data: AnalysisData, compDa
 
                 if (comparisonCompanies.length === 0) return null;
 
-                // Build conversion rates map
+                /* Build conversion rates map */
                 const rateMap: Record<string, number> = {};
                 for (const c of compData.companies) {
                     const key = `${c.currency}_${c.year}`;
@@ -540,57 +551,59 @@ function RatingTab({ data, compData, loadingComp }: { data: AnalysisData, compDa
                 };
 
                 return (
-                    <div className="space-y-6 mt-8">
-                        <div className="flex items-center gap-2 px-1">
-                            <DollarSign size={20} className="text-teal-600" />
+                    <div className="space-y-6 mt-4">
+                        <div className="flex items-center gap-2.5 px-1">
+                            <div className="w-7 h-7 rounded-lg bg-teal-100 text-teal-600 flex items-center justify-center">
+                                <DollarSign size={16} />
+                            </div>
                             <h2 className="text-lg font-bold text-gray-900">Financial Comparison</h2>
                         </div>
 
-                        {/* Balance Sheet KPIs */}
                         <KPITable
                             title="Balance Sheet KPIs"
+                            targetName={targetName}
                             companies={comparisonCompanies}
                             toUSD={toUSD}
                             columns={[
-                                { key: 'total_assets', label: 'Total Assets (MUSD)', type: 'money' },
-                                { key: 'total_equity', label: 'Total Equity (MUSD)', type: 'money' },
-                                { key: 'total_liabilities', label: 'Total Liabilities (MUSD)', type: 'money' },
+                                { key: 'total_assets', label: 'Total Assets', type: 'money' },
+                                { key: 'total_equity', label: 'Total Equity', type: 'money' },
+                                { key: 'total_liabilities', label: 'Total Liabilities', type: 'money' },
                                 { key: 'roa_percent', label: 'ROA %', type: 'ratio' },
                                 { key: 'roe_percent', label: 'ROE %', type: 'ratio' },
-                                { key: 'deposits_to_assets_percent', label: 'Deposits-to-Assets %', type: 'ratio' },
+                                { key: 'deposits_to_assets_percent', label: 'Dep/Assets %', type: 'ratio' },
                             ]}
                         />
 
-                        {/* Profitability KPIs */}
                         <KPITable
                             title="Profitability KPIs"
+                            targetName={targetName}
                             companies={comparisonCompanies}
                             toUSD={toUSD}
                             columns={[
-                                { key: 'total_operating_revenue', label: 'Total Operating Income (MUSD)', type: 'money' },
-                                { key: 'pat', label: 'Net Income (MUSD)', type: 'money' },
-                                { key: 'net_interests', label: 'Net Interest Income (MUSD)', type: 'money' },
-                                { key: 'nim_percent', label: 'Net Interest Margin %', type: 'ratio' },
-                                { key: 'interest_coverage_ratio', label: 'Interest Coverage Ratio', type: 'ratio' },
-                                { key: 'cost_to_income_ratio_percent', label: 'Cost-to-Income %', type: 'ratio', isGoodLow: true },
+                                { key: 'total_operating_revenue', label: 'Op. Income', type: 'money' },
+                                { key: 'pat', label: 'Net Income', type: 'money' },
+                                { key: 'net_interests', label: 'Net Int. Income', type: 'money' },
+                                { key: 'nim_percent', label: 'NIM %', type: 'ratio' },
+                                { key: 'interest_coverage_ratio', label: 'Int. Coverage', type: 'ratio' },
+                                { key: 'cost_to_income_ratio_percent', label: 'Cost/Income %', type: 'ratio', isGoodLow: true },
                             ]}
                         />
 
-                        {/* Loan KPIs */}
                         <KPITable
                             title="Loan KPIs"
+                            targetName={targetName}
                             companies={comparisonCompanies}
                             toUSD={toUSD}
                             columns={[
                                 { key: 'loan_to_deposit_percent', label: 'LDR %', type: 'ratio' },
                                 { key: 'loans_to_assets_percent', label: 'LAR %', type: 'ratio' },
-                                { key: 'npl_percent', label: 'NPL Ratio %', type: 'ratio', isGoodLow: true },
+                                { key: 'npl_percent', label: 'NPL %', type: 'ratio', isGoodLow: true },
                             ]}
                         />
 
-                        {/* Risk KPIs */}
                         <KPITable
                             title="Risk KPIs"
+                            targetName={targetName}
                             companies={comparisonCompanies}
                             toUSD={toUSD}
                             columns={[
@@ -607,7 +620,9 @@ function RatingTab({ data, compData, loadingComp }: { data: AnalysisData, compDa
 }
 
 
-/* ── KPI Comparison Table Component ── */
+/* ══════════════════════════════════════════════════════════════════
+   KPI COMPARISON TABLE
+   ══════════════════════════════════════════════════════════════════ */
 
 interface KPIColumn {
     key: string;
@@ -616,8 +631,9 @@ interface KPIColumn {
     isGoodLow?: boolean;
 }
 
-function KPITable({ title, companies, toUSD, columns }: {
+function KPITable({ title, targetName, companies, toUSD, columns }: {
     title: string;
+    targetName: string;
     companies: any[];
     toUSD: (val: number | undefined, currency: string, year: number) => number | null;
     columns: KPIColumn[];
@@ -630,44 +646,57 @@ function KPITable({ title, companies, toUSD, columns }: {
             <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                     <thead>
-                        <tr className="bg-teal-50 border-b border-teal-100">
+                        <tr className="bg-teal-50/60 border-b border-teal-100">
                             <th className="text-left px-4 py-2.5 text-[10px] font-bold text-teal-800 uppercase tracking-wider">Entity</th>
                             {columns.map(col => (
-                                <th key={col.key} className="text-right px-4 py-2.5 text-[10px] font-bold text-teal-800 uppercase tracking-wider whitespace-nowrap">{col.label}</th>
+                                <th key={col.key} className="text-right px-4 py-2.5 text-[10px] font-bold text-teal-800 uppercase tracking-wider whitespace-nowrap">
+                                    {col.label}{col.type === 'money' ? ' (USD)' : ''}
+                                </th>
                             ))}
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                        {companies.map((c, i) => (
-                            <tr key={i} className="hover:bg-gray-50/50 transition-colors">
-                                <td className="px-4 py-3 text-gray-900 font-semibold text-[13px] whitespace-nowrap">{c.company_name}</td>
-                                {columns.map(col => {
-                                    let val: number | null = null;
-                                    if (col.type === 'money') {
-                                        val = toUSD(c.metrics?.[col.key], c.currency, c.year);
-                                    } else {
-                                        val = c.computed_ratios?.[col.key] ?? c.metrics?.[col.key] ?? null;
-                                    }
+                        {companies.map((c, i) => {
+                            const isTarget = c.company_name === targetName;
+                            return (
+                                <tr key={i} className={`transition-colors ${isTarget ? 'bg-blue-50/40 hover:bg-blue-50/60' : 'hover:bg-gray-50/50'}`}>
+                                    <td className={`px-4 py-3 text-[13px] whitespace-nowrap ${isTarget ? 'font-bold text-blue-900' : 'font-semibold text-gray-900'}`}>
+                                        {isTarget && <span className="text-blue-500 mr-1">★</span>}
+                                        {c.company_name}
+                                    </td>
+                                    {columns.map(col => {
+                                        let val: number | null = null;
+                                        if (col.type === 'money') {
+                                            val = toUSD(c.metrics?.[col.key], c.currency, c.year);
+                                        } else {
+                                            const ratios = computeRatios(c.metrics || {});
+                                            val = ratios[col.key] ?? c.metrics?.[col.key] ?? null;
+                                        }
 
-                                    const cellBg = col.type === 'ratio' && val !== null
-                                        ? (col.isGoodLow
-                                            ? (val <= 50 ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-700')
-                                            : (val >= 0 ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-700'))
-                                        : '';
-
-                                    return (
-                                        <td key={col.key} className={`px-4 py-3 text-right tabular-nums font-semibold ${cellBg}`}>
-                                            {val !== null
-                                                ? col.type === 'money'
-                                                    ? fmtUSD(val / 1_000_000)
-                                                    : `${val.toFixed(2)}%`
-                                                : <span className="text-gray-300">N/A</span>
+                                        /* Colour coding for ratio cells */
+                                        let cellStyle = '';
+                                        if (col.type === 'ratio' && val !== null) {
+                                            if (col.isGoodLow) {
+                                                cellStyle = val <= 50 ? 'text-emerald-700 bg-emerald-50/50' : 'text-red-600 bg-red-50/50';
+                                            } else {
+                                                cellStyle = val >= 5 ? 'text-emerald-700 bg-emerald-50/50' : val >= 0 ? 'text-gray-900' : 'text-red-600 bg-red-50/50';
                                             }
-                                        </td>
-                                    );
-                                })}
-                            </tr>
-                        ))}
+                                        }
+
+                                        return (
+                                            <td key={col.key} className={`px-4 py-3 text-right tabular-nums font-semibold text-[13px] ${cellStyle}`}>
+                                                {val !== null
+                                                    ? col.type === 'money'
+                                                        ? fmtCompact(val)
+                                                        : `${val.toFixed(2)}%`
+                                                    : <span className="text-gray-300 font-normal italic">N/A</span>
+                                                }
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>
@@ -676,7 +705,9 @@ function KPITable({ title, companies, toUSD, columns }: {
 }
 
 
-/* ── Peer Selector Component ── */
+/* ══════════════════════════════════════════════════════════════════
+   PEER SELECTOR
+   ══════════════════════════════════════════════════════════════════ */
 
 function PeerSelector({ availableCompanies, selectedPeers, peerDropdownOpen, setPeerDropdownOpen, addPeer, removePeer }: {
     availableCompanies: AnalysisListItem[];
@@ -719,11 +750,14 @@ function PeerSelector({ availableCompanies, selectedPeers, peerDropdownOpen, set
 }
 
 
-/* ── Profitability Chart ── */
+/* ══════════════════════════════════════════════════════════════════
+   PROFITABILITY CHART
+   ══════════════════════════════════════════════════════════════════ */
 
 function ProfitabilityChart({ companies, targetName }: { companies: any[]; targetName: string }) {
     const chartData = companies.map((c, i) => ({
         name: c.company_name === targetName ? `★ ${c.company_name}` : c.company_name,
+        shortName: c.company_name.length > 18 ? `${c.company_name.slice(0, 16)}...` : c.company_name,
         'PAT (USDm)': c.pat ?? 0,
         'ROE (%)': c.roe ?? 0,
         fill: COMPANY_COLORS[i % COMPANY_COLORS.length],
@@ -734,12 +768,18 @@ function ProfitabilityChart({ companies, targetName }: { companies: any[]; targe
             <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-[0.15em] mb-4">Profitability Comparison</h3>
             <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={chartData} margin={{ top: 10, right: 30, bottom: 40, left: 10 }}>
+                    <ComposedChart data={chartData} margin={{ top: 10, right: 30, bottom: 20, left: 10 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                        <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6b7280' }} interval={0} angle={-20} textAnchor="end" height={60} />
+                        <XAxis
+                            dataKey="name"
+                            tick={{ fontSize: 10, fill: '#6b7280' }}
+                            interval={0}
+                            height={40}
+                            tickFormatter={(v: string) => v.length > 20 ? `${v.slice(0, 18)}...` : v}
+                        />
                         <YAxis yAxisId="left" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} label={{ value: 'USDm', angle: -90, position: 'insideLeft', style: { fontSize: 10, fill: '#9ca3af' } }} />
                         <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} label={{ value: '%', angle: 90, position: 'insideRight', style: { fontSize: 10, fill: '#9ca3af' } }} />
-                        <Tooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '12px', padding: '8px 12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                        <Tooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '11px', padding: '6px 10px', boxShadow: '0 4px 12px -2px rgb(0 0 0 / 0.08)' }} />
                         <Legend wrapperStyle={{ fontSize: 11, fontWeight: 500, paddingTop: 8 }} />
                         <Bar yAxisId="left" dataKey="PAT (USDm)" radius={[4, 4, 0, 0]} barSize={32} animationDuration={800} animationEasing="ease-out">
                             {chartData.map((entry, i) => <Cell key={i} fill={entry.fill} fillOpacity={0.8} />)}

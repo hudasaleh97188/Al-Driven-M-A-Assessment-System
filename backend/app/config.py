@@ -8,6 +8,10 @@ Reads from environment variables with sensible defaults.
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
@@ -32,3 +36,8 @@ PRIMARY_MODEL   = os.getenv("PRIMARY_MODEL", "gemini-3.1-pro-preview")
 # ---------------------------------------------------------------------------
 SERVER_HOST = os.getenv("SERVER_HOST", "0.0.0.0")
 SERVER_PORT = int(os.getenv("SERVER_PORT", "5050"))
+
+# ---------------------------------------------------------------------------
+# Supported upload file extensions
+# ---------------------------------------------------------------------------
+SUPPORTED_UPLOAD_EXTENSIONS = {".pdf", ".pptx", ".csv", ".xlsx", ".xls"}

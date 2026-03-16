@@ -132,7 +132,7 @@ export default function App() {
                             {TABS.map(t => (
                                 <button
                                     key={t.key}
-                                    onClick={() => setTab(t.key)}
+                                    onClick={() => { setTab(t.key); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                                     className={`px-4 py-2.5 text-sm font-medium transition-colors relative ${tab === t.key
                                         ? 'text-blue-600'
                                         : 'text-gray-400 hover:text-gray-600'

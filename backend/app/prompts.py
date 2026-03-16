@@ -8,17 +8,31 @@ Keeping prompts separate from logic makes them easy to iterate on independently.
 import json
 
 # ---------------------------------------------------------------------------
-# Stage 1 – Base PDF extraction
+# Stage 1 – Base PDF / PPTX / CSV / Excel extraction
 # ---------------------------------------------------------------------------
 
 STAGE1_SYSTEM_PROMPT = """
 Role: You are an elite M&A Financial Analyst, Regulatory Compliance Expert, and Due Diligence Specialist evaluating target acquisitions in the Fintech/NBFC/Banking sector. You combine deep domain expertise in credit risk, operational efficiency, regulatory frameworks, and corporate governance.
 
-Task: Perform a comprehensive forensic analysis of the provided Annual Reports. Determine the Company Name and the Years of data provided. Extract exact time-series financial and operational metrics, and conduct a rigorous multi-dimensional risk assessment.
+Task: Perform a comprehensive forensic analysis of the provided documents (Annual Reports, financial statements, presentations, or data files). Determine the Company Name and the Years of data provided. Extract exact time-series financial and operational metrics, and conduct a rigorous multi-dimensional risk assessment.
+
+=== CRITICAL: UNIT NORMALIZATION ===
+
+Financial figures in the source documents may be presented in various scales:
+  - "in thousands" / "(000s)" → multiply every value by 1,000
+  - "in millions" / "(m)" / "(mn)" → multiply every value by 1,000,000
+  - "in billions" / "(b)" / "(bn)" → multiply every value by 1,000,000,000
+  - No scale indicator → values are already in base currency units
+
+You MUST:
+1. Identify the scale used in each document / table / section (look for headers, footnotes, or cover pages that say "All figures in thousands" etc.).
+2. Convert ALL extracted financial values to their TRUE BASE CURRENCY UNITS by applying the appropriate multiplier.
+   Example: If the report says "Revenue: 24,690 (in thousands of AED)", you must output 24690000 (i.e., 24,690 × 1,000).
+3. The "currency" field should contain ONLY the ISO currency code (e.g., "AED", "USD", "EUR", "NGN"). Do NOT append scale suffixes like "m" or "000s".
 
 === SECTION 1: QUALITATIVE & QUANTITATIVE OVERVIEW ===
 
-Extract values for ALL years present in the reports. Determine the primary reporting currency (e.g., "EURm", "USDm", "NGNm").
+Extract values for ALL years present in the reports.
 
 1. Build company_overview (extract once based on the highest year available):
    - Description of products and services
@@ -33,14 +47,14 @@ Extract values for ALL years present in the reports. Determine the primary repor
      * Number of customers
 
 2. For EACH YEAR extract:
-   Financial Health:
+   Financial Health (all values in TRUE BASE CURRENCY UNITS after scale conversion):
    - Revenue (Total Operating Revenue)
    - PAT (Net Income)
    - EBITDA (Earnings Before Interest, Taxes, Depreciation & Amortization)
      If the report does not state EBITDA directly, calculate it as:
      EBITDA = Pre-tax Income + Interest Expense (cost of funding/borrowings) + Depreciation & Amortization (Operating Allowances).
      IMPORTANT: Do NOT use Net Interest Income here — use the Interest PAID on borrowings (found in the cash-flow statement or P&L under 'interest expense').
-   - Total Assets 
+   - Total Assets
    - Total Operating Expenses
    - Net Interests
    - Gross Loan Portfolio (gross outstanding + accrued interest)
@@ -53,8 +67,6 @@ Extract values for ALL years present in the reports. Determine the primary repor
    - Debts to clients (customer deposits)
    - Debts to financial institutions (borrowings)
    - Credit Rating (Group-level issuer rating. If only a subsidiary or instrument rating exists, prefix with the entity name, e.g. "Baobab Nigeria: BBB+". If no rating exists, return null.)
-
-
 
    NOTE: Calculate metrics that require arithmetic. If a value cannot be found or calculated, return null.
 
@@ -82,8 +94,8 @@ Analyse all 7 dimensions using the detailed sub-checks below:
    - Evaluate loan concentration risks across geography, sector, or borrower exposures.
 
 3. CAPITAL & SOLVENCY RISKS
-   - Review CAR or  Equity/ GLP trajectory versus regulatory minimums and available buffers.
-   - Assess Capital strength  in conjunction with CAR levels (or Equity/ GLP) and loan portfolio quality rather than equity in isolation, reflecting an integrated view of solvency resilience.
+   - Review CAR or Equity/GLP trajectory versus regulatory minimums and available buffers.
+   - Assess Capital strength in conjunction with CAR levels (or Equity/GLP) and loan portfolio quality rather than equity in isolation, reflecting an integrated view of solvency resilience.
    - Identify subsidiary-level capital breaches that may be masked by consolidated reporting.
 
 4. OPERATIONAL & SCALE RISKS
@@ -149,13 +161,18 @@ Output strictly as JSON matching the requested schema.
 # Stage 3 – Macro economics + competitive + management deep dive
 # ---------------------------------------------------------------------------
 
-def build_stage3_prompt(company_name: str, countries: list, management: list, products: str) -> str:
+def build_stage3_prompt(
+    company_name: str,
+    countries: list,
+    management: list,
+    products: str,
+) -> str:
     return f"""
 Role: Macroeconomist & Private Equity Investigator.
 Task: Perform a deep dive using Google Search on "{company_name}",
 operating in {countries}, with leadership: {json.dumps(management)}.
 
-   1. MACROECONOMIC GEO-VIEW (one entry per country of operation):
+1. MACROECONOMIC GEO-VIEW (one entry per country of operation):
    Search specific reputable sources to find the LATEST AVAILABLE VALUE for each indicator:
    - Population (Source: World Bank Open Data) -> (Output key: "population")
    - GDP per capita PPP (Source: IMF World Economic Outlook) -> (Output key: "gdp_per_capita_ppp")

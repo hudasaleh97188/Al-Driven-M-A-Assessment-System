@@ -3,7 +3,9 @@ peer_rating_schemas.py
 ----------------------
 Gemini structured-output schema for LLM-based scoring of M&A criteria.
 
-All financial values must be reported in USD millions.
+The LLM only scores qualitative criteria (4, 6, 7, 8, 9).
+Financial values and currency conversion are handled deterministically
+in the backend before the LLM call.
 """
 
 # ---------------------------------------------------------------------------
@@ -19,9 +21,6 @@ ALL_LLM_SCORING_SCHEMA = {
                 "type": "OBJECT",
                 "properties": {
                     "company_name": {"type": "STRING"},
-                    "pat_usdm": {"type": "NUMBER", "description": "PAT converted to USD millions"},
-                    "total_equity_usdm": {"type": "NUMBER", "description": "Total Equity converted to USD millions"},
-                    "gross_loan_portfolio_usdm": {"type": "NUMBER", "description": "Gross Loan Portfolio converted to USD millions"},
                     "criteria": {
                         "type": "ARRAY",
                         "items": {

@@ -155,7 +155,6 @@ export interface FinancialStatement {
         is_calculated: number;
         data_source: string;
     }>;
-    computed_ratios?: Record<string, number>;
     edit_history: FinancialEdit[];
 }
 
@@ -237,7 +236,6 @@ export interface ComparisonCompany {
     year: number;
     usd_rate: number | null;
     metrics: Record<string, number>;
-    computed_ratios: Record<string, number>;
 }
 
 export interface CurrencyRate {

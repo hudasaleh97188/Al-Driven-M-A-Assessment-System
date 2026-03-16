@@ -3,9 +3,14 @@ schemas.py
 ----------
 Gemini structured-output schemas for all three pipeline stages.
 
-Stage 1 – Base PDF extraction  (STAGE1_SCHEMA)
-Stage 2 – Web enrichment + IT  (STAGE2_SCHEMA)
-Stage 3 – Macro + Management   (STAGE3_SCHEMA)
+Stage 1 – Base document extraction  (STAGE1_SCHEMA)
+Stage 2 – Web enrichment + IT       (STAGE2_SCHEMA)
+Stage 3 – Macro + Management        (STAGE3_SCHEMA)
+
+All financial values are expected in TRUE BASE CURRENCY UNITS (i.e. after
+the LLM has applied the scale multiplier described in the prompt).
+The ``currency`` field must be an ISO 4217 code (e.g. "USD", "AED", "NGN")
+with NO scale suffix.
 """
 
 # ---------------------------------------------------------------------------
@@ -32,7 +37,10 @@ _SHAREHOLDER_ITEM = {
 
 COMPANY_OVERVIEW_SCHEMA = {
     "type": "OBJECT",
-    "description": "High-level qualitative information about the company's operations, leadership, and structure.",
+    "description": (
+        "High-level qualitative information about the company's operations, "
+        "leadership, and structure."
+    ),
     "properties": {
         "description_of_products_and_services": {"type": "STRING"},
         "countries_of_operation": {
@@ -56,11 +64,15 @@ COMPANY_OVERVIEW_SCHEMA = {
         },
         "revenue_by_subsidiaries_or_country": {
             "type": "ARRAY",
-            "description": "Revenue breakdown by subsidiaries or country if subsidiaries are not available (latest available year).",
+            "description": (
+                "Revenue breakdown by subsidiaries or country if subsidiaries "
+                "are not available (latest available year). Values must be in "
+                "TRUE BASE CURRENCY UNITS after scale conversion."
+            ),
             "items": {
                 "type": "OBJECT",
                 "properties": {
-                    "subsidiary_or_country": {"type": "STRING"},
+                    "subsidiary_or_country":  {"type": "STRING"},
                     "total_operating_revenue": {"type": "NUMBER"},
                 },
                 "required": ["subsidiary_or_country", "total_operating_revenue"],
@@ -68,19 +80,19 @@ COMPANY_OVERVIEW_SCHEMA = {
         },
         "operational_scale": {
             "type": "OBJECT",
-            "description": "Operational footprint and scale indicators (latest available year)",
+            "description": "Operational footprint and scale indicators (latest available year).",
             "properties": {
                 "number_of_branches": {
                     "type": "INTEGER",
-                    "description": "Total number of physical branches (excluding light sales points/agents)",
+                    "description": "Total number of physical branches (excluding light sales points/agents).",
                 },
                 "number_of_employees": {
                     "type": "INTEGER",
-                    "description": "Total staff headcount at year-end",
+                    "description": "Total staff headcount at year-end.",
                 },
                 "number_of_customers": {
                     "type": "INTEGER",
-                    "description": "Total number of active customers",
+                    "description": "Total number of active customers.",
                 },
             },
         },
@@ -92,7 +104,7 @@ COMPANY_OVERVIEW_SCHEMA = {
         "shareholder_structure",
         "strategic_partners",
         "revenue_by_subsidiaries_or_country",
-        "operational_scale"
+        "operational_scale",
     ],
 }
 
@@ -102,57 +114,61 @@ _FINANCIAL_DATA_ITEM = {
         "year": {"type": "INTEGER"},
         "financial_health": {
             "type": "OBJECT",
+            "description": (
+                "All monetary values MUST be in TRUE BASE CURRENCY UNITS. "
+                "If the source says 'in thousands', multiply by 1,000; "
+                "'in millions', multiply by 1,000,000; etc."
+            ),
             "properties": {
                 "total_operating_revenue": {
                     "type": "NUMBER",
-                    "description": "Total Operating Revenue",
+                    "description": "Total Operating Revenue (base currency units).",
                 },
                 "ebitda": {
                     "type": "NUMBER",
                     "description": (
                         "Earnings Before Interest, Taxes, Depreciation & Amortization. "
-                        "If not directly stated, calculate as: Pre-tax Income + Interest Expense "
-                        "(cost of funding/borrowings) + Depreciation & Amortization. "
+                        "If not directly stated, calculate as: Pre-tax Income + Interest "
+                        "Expense (cost of funding/borrowings) + Depreciation & Amortization. "
                         "Do NOT use Net Interest Income — use Interest PAID on borrowings."
                     ),
                 },
-                "pat":   {"type": "NUMBER", "description": "Net Income"},
-                "total_assets": {"type": "NUMBER"},
-                "total_operating_expenses": {"type": "NUMBER"},
-                "net_interests": {"type": "NUMBER"},
+                "pat":                          {"type": "NUMBER", "description": "Net Income (base currency units)."},
+                "total_assets":                 {"type": "NUMBER", "description": "Total Assets (base currency units)."},
+                "total_operating_expenses":     {"type": "NUMBER", "description": "Total Operating Expenses (base currency units)."},
+                "net_interests":                {"type": "NUMBER", "description": "Net Interest Income (base currency units)."},
                 "gross_loan_portfolio": {
                     "type": "NUMBER",
-                    "description": "Loans gross outstanding and accrued interest",
+                    "description": "Loans gross outstanding and accrued interest (base currency units).",
                 },
                 "loans_with_arrears_over_30_days": {"type": "NUMBER"},
                 "gross_non_performing_loans": {
                     "type": "NUMBER",
-                    "description": "Gross Non-Performing Loans / NPL (loans >90 days past due)",
+                    "description": "Gross Non-Performing Loans / NPL (loans >90 days past due).",
                 },
-                "total_loan_loss_provisions": {"type": "NUMBER"},
+                "total_loan_loss_provisions":   {"type": "NUMBER"},
                 "total_equity": {
                     "type": "NUMBER",
-                    "description": "Company's accounting net worth (assets minus liabilities)",
+                    "description": "Company's accounting net worth (assets minus liabilities).",
                 },
-
                 "disbursals": {
                     "type": "NUMBER",
-                    "description": "Loans disbursed during the year",
+                    "description": "Loans disbursed during the year.",
                 },
                 "debts_to_clients": {
                     "type": "NUMBER",
-                    "description": "Customer deposits",
+                    "description": "Customer deposits.",
                 },
                 "debts_to_financial_institutions": {
                     "type": "NUMBER",
-                    "description": "Borrowings from financial institutions",
+                    "description": "Borrowings from financial institutions.",
                 },
                 "credit_rating": {
                     "type": "STRING",
                     "description": (
-                        "Group-level issuer credit rating. If only a subsidiary or instrument "
-                        "rating exists, prefix with entity name (e.g. 'Baobab Nigeria: BBB+'). "
-                        "Return null if none."
+                        "Group-level issuer credit rating. If only a subsidiary or "
+                        "instrument rating exists, prefix with entity name "
+                        "(e.g. 'Baobab Nigeria: BBB+'). Return null if none."
                     ),
                 },
             },
@@ -166,7 +182,7 @@ _ANOMALY_ITEM = {
     "properties": {
         "category": {
             "type": "STRING",
-            "description": "e.g., 'Regulatory Compliance', 'Financial Anomaly', 'Operational Risk'",
+            "description": "e.g., 'Regulatory Compliance', 'Financial Anomaly', 'Operational Risk'.",
         },
         "description": {
             "type": "STRING",
@@ -174,7 +190,7 @@ _ANOMALY_ITEM = {
         },
         "severity_level": {
             "type": "STRING",
-            "description": "Low, Medium, High, or Critical",
+            "description": "Low, Medium, High, or Critical.",
         },
         "valuation_impact": {
             "type": "STRING",
@@ -185,11 +201,14 @@ _ANOMALY_ITEM = {
             "description": "How to use this point during M&A negotiations.",
         },
     },
-    "required": ["category", "description", "severity_level", "valuation_impact", "negotiation_leverage"],
+    "required": [
+        "category", "description", "severity_level",
+        "valuation_impact", "negotiation_leverage",
+    ],
 }
 
 # ---------------------------------------------------------------------------
-# Stage 1 – Base PDF extraction
+# Stage 1 – Base document extraction
 # ---------------------------------------------------------------------------
 
 STAGE1_SCHEMA = {
@@ -198,7 +217,10 @@ STAGE1_SCHEMA = {
         "company_name": {"type": "STRING"},
         "currency": {
             "type": "STRING",
-            "description": "e.g., USDm, EURm",
+            "description": (
+                "ISO 4217 currency code only (e.g. 'USD', 'AED', 'EUR', 'NGN'). "
+                "Do NOT include scale suffixes like 'm' or '000s'."
+            ),
         },
         "company_overview": COMPANY_OVERVIEW_SCHEMA,
         "financial_data": {
@@ -212,7 +234,10 @@ STAGE1_SCHEMA = {
             "items": _ANOMALY_ITEM,
         },
     },
-    "required": ["company_name", "currency", "company_overview", "financial_data", "anomalies_and_risks"],
+    "required": [
+        "company_name", "currency", "company_overview",
+        "financial_data", "anomalies_and_risks",
+    ],
 }
 
 # ---------------------------------------------------------------------------
@@ -237,15 +262,18 @@ STAGE2_SCHEMA = {
         "quality_of_it": {
             "type": "OBJECT",
             "properties": {
-                "core_banking_systems":   {"type": "ARRAY", "items": {"type": "STRING"}},
+                "core_banking_systems":     {"type": "ARRAY", "items": {"type": "STRING"}},
                 "digital_channel_adoption": {"type": "STRING"},
-                "system_upgrades":        {"type": "ARRAY", "items": {"type": "STRING"}},
-                "vendor_partnerships":    {"type": "ARRAY", "items": {"type": "STRING"}},
-                "cyber_incidents":        {"type": "ARRAY", "items": {"type": "STRING"}},
+                "system_upgrades":          {"type": "ARRAY", "items": {"type": "STRING"}},
+                "vendor_partnerships":      {"type": "ARRAY", "items": {"type": "STRING"}},
+                "cyber_incidents":          {"type": "ARRAY", "items": {"type": "STRING"}},
             },
         },
     },
-    "required": ["company_overview", "financial_data", "is_publicly_listed", "quality_of_it"],
+    "required": [
+        "company_overview", "financial_data",
+        "is_publicly_listed", "quality_of_it",
+    ],
 }
 
 # ---------------------------------------------------------------------------
@@ -271,15 +299,10 @@ STAGE3_SCHEMA = {
                     "corruption_perceptions_index_rank": {"type": "STRING"},
                 },
                 "required": [
-                    "country",
-                    "population",
-                    "gdp_per_capita_ppp",
-                    "gdp_growth_forecast",
-                    "inflation",
-                    "central_bank_interest_rate",
-                    "unemployment_rate",
-                    "country_risk_rating",
-                    "corruption_perceptions_index_rank"
+                    "country", "population", "gdp_per_capita_ppp",
+                    "gdp_growth_forecast", "inflation",
+                    "central_bank_interest_rate", "unemployment_rate",
+                    "country_risk_rating", "corruption_perceptions_index_rank",
                 ],
             },
         },
@@ -288,20 +311,22 @@ STAGE3_SCHEMA = {
             "properties": {
                 "key_competitors": {
                     "type": "ARRAY",
-                    "description": "Direct competitors offering exact same products/services and operating in the same or similar regions.",
+                    "description": (
+                        "Direct competitors offering exact same products/services "
+                        "and operating in the same or similar regions."
+                    ),
                     "items": {"type": "STRING"},
                 },
-                "market_share_data":                    {"type": "STRING"},
-                "central_bank_sector_reports_summary":  {"type": "STRING"},
-                "industry_studies_summary":             {"type": "STRING"},
-                "customer_growth_or_attrition_news":    {"type": "STRING"},
+                "market_share_data":                   {"type": "STRING"},
+                "central_bank_sector_reports_summary": {"type": "STRING"},
+                "industry_studies_summary":            {"type": "STRING"},
+                "customer_growth_or_attrition_news":   {"type": "STRING"},
             },
             "required": [
-                "key_competitors",
-                "market_share_data",
+                "key_competitors", "market_share_data",
                 "central_bank_sector_reports_summary",
                 "industry_studies_summary",
-                "customer_growth_or_attrition_news"
+                "customer_growth_or_attrition_news",
             ],
         },
         "management_quality": {
@@ -309,13 +334,13 @@ STAGE3_SCHEMA = {
             "items": {
                 "type": "OBJECT",
                 "properties": {
-                    "name":                  {"type": "STRING"},
-                    "position":              {"type": "STRING"},
-                    "previous_experience":   {
+                    "name":                {"type": "STRING"},
+                    "position":            {"type": "STRING"},
+                    "previous_experience": {
                         "type": "STRING",
                         "description": "Total years of experience and previous important roles held.",
                     },
-                    "tenure_history":        {"type": "STRING"},
+                    "tenure_history":      {"type": "STRING"},
                 },
                 "required": ["name"],
             },

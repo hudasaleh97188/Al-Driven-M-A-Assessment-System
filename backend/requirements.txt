@@ -4,4 +4,6 @@ python-multipart
 pydantic
 google-genai
 loguru
+openpyxl
 pytest
+python-dotenv

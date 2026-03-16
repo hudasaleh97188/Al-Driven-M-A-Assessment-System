@@ -2,7 +2,11 @@
 peer_rating_prompts.py
 ----------------------
 Prompt templates for LLM-based scoring of M&A criteria.
-Single-call scoring prompt with all 5 LLM-evaluated rubrics.
+
+Only QUALITATIVE criteria are evaluated by the LLM (4, 6, 7, 8, 9).
+All financial / currency conversion logic has been removed from the prompt;
+deterministic scorers receive pre-converted USD numbers directly from the
+backend.
 """
 
 import json
@@ -50,16 +54,16 @@ _COMPETITOR_POSITIONING_RUBRIC = """
 - 4: Top 1–3 in at least 1 market.
 - 3: Top 4–6 in at least 2 markets.
 - 1: Otherwise.
-Use fields: competitive_position, gross_loan_portfolio, countries_of_operation.
+Use fields: competitive_position, countries_of_operation.
 """
 
-ALL_RUBRICS = f"""
-{_PRODUCT_MARKET_RUBRIC}
-{_MANAGEMENT_QUALITY_RUBRIC}
-{_STRATEGIC_PARTNERS_RUBRIC}
-{_IT_QUALITY_RUBRIC}
-{_COMPETITOR_POSITIONING_RUBRIC}
-"""
+ALL_RUBRICS = (
+    f"{_PRODUCT_MARKET_RUBRIC}\n"
+    f"{_MANAGEMENT_QUALITY_RUBRIC}\n"
+    f"{_STRATEGIC_PARTNERS_RUBRIC}\n"
+    f"{_IT_QUALITY_RUBRIC}\n"
+    f"{_COMPETITOR_POSITIONING_RUBRIC}"
+)
 
 LLM_CRITERION_NAMES = [
     "Product / Market Strategy Fit",
@@ -73,17 +77,25 @@ LLM_CRITERION_NAMES = [
 def build_all_criteria_scoring_prompt(all_companies_data: list[dict]) -> str:
     """
     Build a single prompt that asks the LLM to score ALL companies
-    on ALL 5 LLM-evaluated criteria at once.
+    on ALL 5 qualitative criteria at once.
+
+    The ``all_companies_data`` list should contain only the qualitative
+    fields needed by the rubrics — no raw financial numbers or currency
+    conversion instructions.
     """
     companies_summary = json.dumps(all_companies_data, indent=2)
-
     criteria_list = "\n".join(f"  - {name}" for name in LLM_CRITERION_NAMES)
 
     return f"""
 Role: M&A Strategy Scoring Expert.
 
-Task: Score each company below on the following 5 criteria. Each criterion has a
-rubric specifying what data fields to use — only use the indicated fields for each.
+Task: Score each company below on the following 5 QUALITATIVE criteria.
+Each criterion has a rubric specifying what data fields to use — only use
+the indicated fields for each.
+
+IMPORTANT: Do NOT attempt any financial calculations, currency conversions,
+or numerical comparisons. Focus exclusively on qualitative assessment based
+on the rubric descriptions.
 
 CRITERIA AND RUBRICS:
 {ALL_RUBRICS}
@@ -91,10 +103,7 @@ CRITERIA AND RUBRICS:
 COMPANIES DATA:
 {companies_summary}
 
-For EACH company, you must provide:
-1. Converted financial values in USD millions (pat_usdm, total_equity_usdm, gross_loan_portfolio_usdm)
-   - Read the company's "currency". If it is not USD/USDm, apply an approximate exchange rate conversion to USD millions. If already USDm, just pass the values through.
-2. Score ALL of these criteria:
+For EACH company, score ALL of these criteria:
 {criteria_list}
 
 For each criterion per company provide:

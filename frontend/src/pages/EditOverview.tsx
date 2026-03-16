@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Save, ArrowLeft, AlertCircle } from 'lucide-react';
+import { Save, ArrowLeft, AlertCircle, ChevronDown, ChevronRight } from 'lucide-react';
 import { editOverview } from '../api';
 import type { AnalysisData } from '../types';
 
@@ -17,12 +17,17 @@ interface FieldDef {
     currentValue: string;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Field extraction — walks the entire AnalysisData tree and creates an
+// editable FieldDef for every leaf value the user might want to change.
+// ─────────────────────────────────────────────────────────────────────────────
+
 function extractFields(data: AnalysisData): FieldDef[] {
     const fields: FieldDef[] = [];
     const ov = data.company_overview;
     const scale = ov?.operational_scale;
 
-    // Company Overview text fields
+    // ── Company Overview ─────────────────────────────────────────────────
     if (ov?.description_of_products_and_services !== undefined) {
         fields.push({
             path: 'company_overview.description_of_products_and_services',
@@ -33,37 +38,6 @@ function extractFields(data: AnalysisData): FieldDef[] {
         });
     }
 
-    // Operational Scale
-    if (scale) {
-        if (scale.number_of_branches !== undefined) {
-            fields.push({
-                path: 'company_overview.operational_scale.number_of_branches',
-                label: 'Number of Branches',
-                section: 'Operational Scale',
-                type: 'number',
-                currentValue: String(scale.number_of_branches || ''),
-            });
-        }
-        if (scale.number_of_employees !== undefined) {
-            fields.push({
-                path: 'company_overview.operational_scale.number_of_employees',
-                label: 'Number of Employees',
-                section: 'Operational Scale',
-                type: 'number',
-                currentValue: String(scale.number_of_employees || ''),
-            });
-        }
-        if (scale.number_of_customers !== undefined) {
-            fields.push({
-                path: 'company_overview.operational_scale.number_of_customers',
-                label: 'Number of Customers',
-                section: 'Operational Scale',
-                type: 'number',
-                currentValue: String(scale.number_of_customers || ''),
-            });
-        }
-    }
-
     // Countries
     if (ov?.countries_of_operation) {
         fields.push({
@@ -71,7 +45,9 @@ function extractFields(data: AnalysisData): FieldDef[] {
             label: 'Countries of Operation (comma-separated)',
             section: 'Company Overview',
             type: 'text',
-            currentValue: Array.isArray(ov.countries_of_operation) ? ov.countries_of_operation.join(', ') : String(ov.countries_of_operation),
+            currentValue: Array.isArray(ov.countries_of_operation)
+                ? ov.countries_of_operation.join(', ')
+                : String(ov.countries_of_operation),
         });
     }
 
@@ -82,47 +58,194 @@ function extractFields(data: AnalysisData): FieldDef[] {
             label: 'Strategic Partners (comma-separated)',
             section: 'Company Overview',
             type: 'text',
-            currentValue: Array.isArray(ov.strategic_partners) ? ov.strategic_partners.join(', ') : String(ov.strategic_partners),
+            currentValue: Array.isArray(ov.strategic_partners)
+                ? ov.strategic_partners.join(', ')
+                : String(ov.strategic_partners),
         });
     }
 
-    // Management Team
+    // ── Operational Scale ────────────────────────────────────────────────
+    if (scale) {
+        if (scale.number_of_branches !== undefined) {
+            fields.push({
+                path: 'company_overview.operational_scale.number_of_branches',
+                label: 'Number of Branches',
+                section: 'Operational Scale',
+                type: 'number',
+                currentValue: String(scale.number_of_branches ?? ''),
+            });
+        }
+        if (scale.number_of_employees !== undefined) {
+            fields.push({
+                path: 'company_overview.operational_scale.number_of_employees',
+                label: 'Number of Employees',
+                section: 'Operational Scale',
+                type: 'number',
+                currentValue: String(scale.number_of_employees ?? ''),
+            });
+        }
+        if (scale.number_of_customers !== undefined) {
+            fields.push({
+                path: 'company_overview.operational_scale.number_of_customers',
+                label: 'Number of Customers',
+                section: 'Operational Scale',
+                type: 'number',
+                currentValue: String(scale.number_of_customers ?? ''),
+            });
+        }
+    }
+
+    // ── Revenue by Subsidiaries / Country ────────────────────────────────
+    (ov?.revenue_by_subsidiaries_or_country ?? []).forEach((s, i) => {
+        fields.push({
+            path: `company_overview.revenue_by_subsidiaries_or_country[${i}].subsidiary_or_country`,
+            label: `Subsidiary #${i + 1} — Name`,
+            section: 'Revenue by Subsidiary / Country',
+            type: 'text',
+            currentValue: s.subsidiary_or_country || '',
+        });
+        fields.push({
+            path: `company_overview.revenue_by_subsidiaries_or_country[${i}].total_operating_revenue`,
+            label: `Subsidiary #${i + 1} — Revenue`,
+            section: 'Revenue by Subsidiary / Country',
+            type: 'number',
+            currentValue: String(s.total_operating_revenue ?? ''),
+        });
+    });
+
+    // ── Management Team ──────────────────────────────────────────────────
     (ov?.management_team ?? []).forEach((m, i) => {
         fields.push({
             path: `company_overview.management_team[${i}].name`,
-            label: `Management #${i + 1} - Name`,
+            label: `Manager #${i + 1} — Name`,
             section: 'Management Team',
             type: 'text',
             currentValue: m.name,
         });
         fields.push({
             path: `company_overview.management_team[${i}].position`,
-            label: `Management #${i + 1} - Position`,
+            label: `Manager #${i + 1} — Position`,
             section: 'Management Team',
             type: 'text',
             currentValue: m.position,
         });
     });
 
-    // Shareholders
+    // ── Management Quality (deep-dive from LLM Stage 2) ─────────────────
+    (data.management_quality ?? []).forEach((m, i) => {
+        fields.push({
+            path: `management_quality[${i}].name`,
+            label: `Leader #${i + 1} — Name`,
+            section: 'Management Quality',
+            type: 'text',
+            currentValue: m.name || '',
+        });
+        if (m.position !== undefined) {
+            fields.push({
+                path: `management_quality[${i}].position`,
+                label: `Leader #${i + 1} — Position`,
+                section: 'Management Quality',
+                type: 'text',
+                currentValue: m.position || '',
+            });
+        }
+        if (m.previous_experience !== undefined) {
+            fields.push({
+                path: `management_quality[${i}].previous_experience`,
+                label: `Leader #${i + 1} — Previous Experience`,
+                section: 'Management Quality',
+                type: 'textarea',
+                currentValue: m.previous_experience || '',
+            });
+        }
+        if (m.tenure_history !== undefined) {
+            fields.push({
+                path: `management_quality[${i}].tenure_history`,
+                label: `Leader #${i + 1} — Tenure History`,
+                section: 'Management Quality',
+                type: 'textarea',
+                currentValue: m.tenure_history || '',
+            });
+        }
+    });
+
+    // ── Shareholders ─────────────────────────────────────────────────────
     (ov?.shareholder_structure ?? []).forEach((s, i) => {
         fields.push({
             path: `company_overview.shareholder_structure[${i}].name`,
-            label: `Shareholder #${i + 1} - Name`,
+            label: `Shareholder #${i + 1} — Name`,
             section: 'Shareholders',
             type: 'text',
             currentValue: s.name,
         });
         fields.push({
             path: `company_overview.shareholder_structure[${i}].ownership_percentage`,
-            label: `Shareholder #${i + 1} - Ownership %`,
+            label: `Shareholder #${i + 1} — Ownership %`,
             section: 'Shareholders',
             type: 'number',
-            currentValue: String(s.ownership_percentage || ''),
+            currentValue: String(s.ownership_percentage ?? ''),
         });
     });
 
-    // Competitive Position
+    // ── Quality of IT & Data Usage ───────────────────────────────────────
+    const it = data.quality_of_it;
+    if (it) {
+        if (it.core_banking_systems) {
+            fields.push({
+                path: 'quality_of_it.core_banking_systems',
+                label: 'Core Banking Systems (comma-separated)',
+                section: 'Quality of IT & Data Usage',
+                type: 'text',
+                currentValue: Array.isArray(it.core_banking_systems)
+                    ? it.core_banking_systems.join(', ')
+                    : String(it.core_banking_systems),
+            });
+        }
+        if (it.digital_channel_adoption !== undefined) {
+            fields.push({
+                path: 'quality_of_it.digital_channel_adoption',
+                label: 'Digital Channel Adoption',
+                section: 'Quality of IT & Data Usage',
+                type: 'textarea',
+                currentValue: it.digital_channel_adoption || '',
+            });
+        }
+        if (it.system_upgrades) {
+            fields.push({
+                path: 'quality_of_it.system_upgrades',
+                label: 'System Upgrades (comma-separated)',
+                section: 'Quality of IT & Data Usage',
+                type: 'text',
+                currentValue: Array.isArray(it.system_upgrades)
+                    ? it.system_upgrades.join(', ')
+                    : String(it.system_upgrades),
+            });
+        }
+        if (it.vendor_partnerships) {
+            fields.push({
+                path: 'quality_of_it.vendor_partnerships',
+                label: 'Vendor Partnerships (comma-separated)',
+                section: 'Quality of IT & Data Usage',
+                type: 'text',
+                currentValue: Array.isArray(it.vendor_partnerships)
+                    ? it.vendor_partnerships.join(', ')
+                    : String(it.vendor_partnerships),
+            });
+        }
+        if (it.cyber_incidents) {
+            fields.push({
+                path: 'quality_of_it.cyber_incidents',
+                label: 'Cybersecurity Incidents (comma-separated)',
+                section: 'Quality of IT & Data Usage',
+                type: 'text',
+                currentValue: Array.isArray(it.cyber_incidents)
+                    ? it.cyber_incidents.join(', ')
+                    : String(it.cyber_incidents),
+            });
+        }
+    }
+
+    // ── Competitive Position ─────────────────────────────────────────────
     const cp = data.competitive_position;
     if (cp) {
         if (cp.key_competitors) {
@@ -131,22 +254,197 @@ function extractFields(data: AnalysisData): FieldDef[] {
                 label: 'Key Competitors (comma-separated)',
                 section: 'Competitive Position',
                 type: 'text',
-                currentValue: Array.isArray(cp.key_competitors) ? cp.key_competitors.join(', ') : String(cp.key_competitors),
+                currentValue: Array.isArray(cp.key_competitors)
+                    ? cp.key_competitors.join(', ')
+                    : String(cp.key_competitors),
             });
         }
-        if (cp.market_share_data) {
+        if (cp.market_share_data !== undefined) {
             fields.push({
                 path: 'competitive_position.market_share_data',
                 label: 'Market Share Data',
                 section: 'Competitive Position',
                 type: 'textarea',
-                currentValue: cp.market_share_data,
+                currentValue: cp.market_share_data || '',
+            });
+        }
+        if (cp.central_bank_sector_reports_summary !== undefined) {
+            fields.push({
+                path: 'competitive_position.central_bank_sector_reports_summary',
+                label: 'Central Bank Sector Reports Summary',
+                section: 'Competitive Position',
+                type: 'textarea',
+                currentValue: cp.central_bank_sector_reports_summary || '',
+            });
+        }
+        if (cp.industry_studies_summary !== undefined) {
+            fields.push({
+                path: 'competitive_position.industry_studies_summary',
+                label: 'Industry Studies Summary',
+                section: 'Competitive Position',
+                type: 'textarea',
+                currentValue: cp.industry_studies_summary || '',
+            });
+        }
+        if (cp.customer_growth_or_attrition_news !== undefined) {
+            fields.push({
+                path: 'competitive_position.customer_growth_or_attrition_news',
+                label: 'Customer Growth / Attrition News',
+                section: 'Competitive Position',
+                type: 'textarea',
+                currentValue: cp.customer_growth_or_attrition_news || '',
             });
         }
     }
 
+    // ── Anomalies & Risks ────────────────────────────────────────────────
+    (data.anomalies_and_risks ?? []).forEach((a, i) => {
+        fields.push({
+            path: `anomalies_and_risks[${i}].category`,
+            label: `Risk #${i + 1} — Category`,
+            section: 'Anomalies & Risks',
+            type: 'text',
+            currentValue: a.category || '',
+        });
+        fields.push({
+            path: `anomalies_and_risks[${i}].description`,
+            label: `Risk #${i + 1} — Description`,
+            section: 'Anomalies & Risks',
+            type: 'textarea',
+            currentValue: a.description || '',
+        });
+        fields.push({
+            path: `anomalies_and_risks[${i}].severity_level`,
+            label: `Risk #${i + 1} — Severity Level`,
+            section: 'Anomalies & Risks',
+            type: 'text',
+            currentValue: a.severity_level || '',
+        });
+        fields.push({
+            path: `anomalies_and_risks[${i}].valuation_impact`,
+            label: `Risk #${i + 1} — Valuation Impact`,
+            section: 'Anomalies & Risks',
+            type: 'textarea',
+            currentValue: a.valuation_impact || '',
+        });
+        fields.push({
+            path: `anomalies_and_risks[${i}].negotiation_leverage`,
+            label: `Risk #${i + 1} — Negotiation Leverage`,
+            section: 'Anomalies & Risks',
+            type: 'textarea',
+            currentValue: a.negotiation_leverage || '',
+        });
+    });
+
+    // ── Macroeconomic Geo-View ───────────────────────────────────────────
+    (data.macroeconomic_geo_view ?? []).forEach((g, i) => {
+        const country = g.country || `Country #${i + 1}`;
+        fields.push({
+            path: `macroeconomic_geo_view[${i}].country`,
+            label: `${country} — Country Name`,
+            section: 'Macroeconomic Geo-View',
+            type: 'text',
+            currentValue: g.country || '',
+        });
+        if (g.population !== undefined) {
+            fields.push({
+                path: `macroeconomic_geo_view[${i}].population`,
+                label: `${country} — Population`,
+                section: 'Macroeconomic Geo-View',
+                type: 'text',
+                currentValue: g.population || '',
+            });
+        }
+        if (g.gdp_per_capita_ppp !== undefined) {
+            fields.push({
+                path: `macroeconomic_geo_view[${i}].gdp_per_capita_ppp`,
+                label: `${country} — GDP/Capita (PPP)`,
+                section: 'Macroeconomic Geo-View',
+                type: 'text',
+                currentValue: g.gdp_per_capita_ppp || '',
+            });
+        }
+        if (g.gdp_growth_forecast !== undefined) {
+            fields.push({
+                path: `macroeconomic_geo_view[${i}].gdp_growth_forecast`,
+                label: `${country} — GDP Growth Forecast`,
+                section: 'Macroeconomic Geo-View',
+                type: 'text',
+                currentValue: g.gdp_growth_forecast || '',
+            });
+        }
+        if (g.inflation !== undefined) {
+            fields.push({
+                path: `macroeconomic_geo_view[${i}].inflation`,
+                label: `${country} — Inflation`,
+                section: 'Macroeconomic Geo-View',
+                type: 'text',
+                currentValue: g.inflation || '',
+            });
+        }
+        if (g.central_bank_interest_rate !== undefined) {
+            fields.push({
+                path: `macroeconomic_geo_view[${i}].central_bank_interest_rate`,
+                label: `${country} — Central Bank Interest Rate`,
+                section: 'Macroeconomic Geo-View',
+                type: 'text',
+                currentValue: g.central_bank_interest_rate || '',
+            });
+        }
+        if (g.unemployment_rate !== undefined) {
+            fields.push({
+                path: `macroeconomic_geo_view[${i}].unemployment_rate`,
+                label: `${country} — Unemployment Rate`,
+                section: 'Macroeconomic Geo-View',
+                type: 'text',
+                currentValue: g.unemployment_rate || '',
+            });
+        }
+        if (g.country_risk_rating !== undefined) {
+            fields.push({
+                path: `macroeconomic_geo_view[${i}].country_risk_rating`,
+                label: `${country} — Country Risk Rating`,
+                section: 'Macroeconomic Geo-View',
+                type: 'text',
+                currentValue: g.country_risk_rating || '',
+            });
+        }
+        if (g.corruption_perceptions_index_rank !== undefined) {
+            fields.push({
+                path: `macroeconomic_geo_view[${i}].corruption_perceptions_index_rank`,
+                label: `${country} — CPI Rank`,
+                section: 'Macroeconomic Geo-View',
+                type: 'text',
+                currentValue: g.corruption_perceptions_index_rank || '',
+            });
+        }
+    });
+
     return fields;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Section color mapping
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SECTION_COLORS: Record<string, { bar: string; bg: string; text: string; count: string }> = {
+    'Company Overview':                 { bar: 'bg-blue-500',    bg: 'bg-blue-50',    text: 'text-blue-800',    count: 'bg-blue-100 text-blue-700' },
+    'Operational Scale':                { bar: 'bg-indigo-500',  bg: 'bg-indigo-50',  text: 'text-indigo-800',  count: 'bg-indigo-100 text-indigo-700' },
+    'Revenue by Subsidiary / Country':  { bar: 'bg-violet-500',  bg: 'bg-violet-50',  text: 'text-violet-800',  count: 'bg-violet-100 text-violet-700' },
+    'Management Team':                  { bar: 'bg-purple-500', bg: 'bg-purple-50',  text: 'text-purple-800',  count: 'bg-purple-100 text-purple-700' },
+    'Management Quality':               { bar: 'bg-fuchsia-500',bg: 'bg-fuchsia-50', text: 'text-fuchsia-800', count: 'bg-fuchsia-100 text-fuchsia-700' },
+    'Shareholders':                     { bar: 'bg-pink-500',   bg: 'bg-pink-50',    text: 'text-pink-800',    count: 'bg-pink-100 text-pink-700' },
+    'Quality of IT & Data Usage':       { bar: 'bg-cyan-500',   bg: 'bg-cyan-50',    text: 'text-cyan-800',    count: 'bg-cyan-100 text-cyan-700' },
+    'Competitive Position':             { bar: 'bg-orange-500', bg: 'bg-orange-50',  text: 'text-orange-800',  count: 'bg-orange-100 text-orange-700' },
+    'Anomalies & Risks':                { bar: 'bg-red-500',    bg: 'bg-red-50',     text: 'text-red-800',     count: 'bg-red-100 text-red-700' },
+    'Macroeconomic Geo-View':           { bar: 'bg-teal-500',   bg: 'bg-teal-50',    text: 'text-teal-800',    count: 'bg-teal-100 text-teal-700' },
+};
+
+const DEFAULT_COLOR = { bar: 'bg-gray-500', bg: 'bg-gray-50', text: 'text-gray-800', count: 'bg-gray-100 text-gray-700' };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main component
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function EditOverview({ data, onBack, onSaved }: Props) {
     const fields = useMemo(() => extractFields(data), [data]);
@@ -155,18 +453,21 @@ export default function EditOverview({ data, onBack, onSaved }: Props) {
     const [globalComment, setGlobalComment] = useState('');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
+    const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
     const pendingEdits = useMemo(() => {
-        return fields.filter(f => {
-            const newVal = editValues[f.path];
-            return newVal !== undefined && newVal !== f.currentValue;
-        }).map(f => ({
-            field_path: f.path,
-            label: f.label,
-            old_value: f.currentValue,
-            new_value: editValues[f.path],
-            comment: editComments[f.path] || globalComment || '',
-        }));
+        return fields
+            .filter(f => {
+                const newVal = editValues[f.path];
+                return newVal !== undefined && newVal !== f.currentValue;
+            })
+            .map(f => ({
+                field_path: f.path,
+                label: f.label,
+                old_value: f.currentValue,
+                new_value: editValues[f.path],
+                comment: editComments[f.path] || globalComment || '',
+            }));
     }, [fields, editValues, editComments, globalComment]);
 
     const hasEmptyComments = pendingEdits.some(e => !e.comment.trim());
@@ -210,9 +511,25 @@ export default function EditOverview({ data, onBack, onSaved }: Props) {
         return Array.from(map.entries());
     }, [fields]);
 
+    const toggleSection = (name: string) => {
+        setCollapsed(prev => ({ ...prev, [name]: !prev[name] }));
+    };
+
+    // Count changes per section
+    const changesPerSection = useMemo(() => {
+        const counts: Record<string, number> = {};
+        for (const edit of pendingEdits) {
+            const field = fields.find(f => f.path === edit.field_path);
+            if (field) {
+                counts[field.section] = (counts[field.section] || 0) + 1;
+            }
+        }
+        return counts;
+    }, [pendingEdits, fields]);
+
     return (
         <div className="max-w-5xl mx-auto">
-            {/* Header */}
+            {/* ── Header ── */}
             <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
                 <div className="flex items-center gap-4">
                     <button
@@ -224,7 +541,9 @@ export default function EditOverview({ data, onBack, onSaved }: Props) {
                     </button>
                     <div>
                         <h1 className="text-2xl font-extrabold text-gray-900">Edit Business Overview</h1>
-                        <p className="text-sm text-gray-500 mt-0.5">{data.company_name}</p>
+                        <p className="text-sm text-gray-500 mt-0.5">
+                            {data.company_name} — {fields.length} editable fields across {sections.length} sections
+                        </p>
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -251,7 +570,7 @@ export default function EditOverview({ data, onBack, onSaved }: Props) {
                 </div>
             )}
 
-            {/* Global Comment */}
+            {/* ── Global Comment ── */}
             <div className="mb-6 bg-blue-50 border border-blue-200 rounded-xl p-4">
                 <label className="block text-sm font-semibold text-blue-800 mb-2">
                     Global Comment (applies to all changes without individual comments)
@@ -265,63 +584,89 @@ export default function EditOverview({ data, onBack, onSaved }: Props) {
                 />
             </div>
 
-            {/* Sections */}
-            {sections.map(([sectionName, sectionFields]) => (
-                <div key={sectionName} className="mb-8">
-                    <div className="flex items-center gap-3 mb-4">
-                        <div className="w-1 h-6 bg-blue-500 rounded-full" />
-                        <h3 className="text-lg font-bold text-gray-900">{sectionName}</h3>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {sectionFields.map(field => {
-                            const val = editValues[field.path] ?? field.currentValue;
-                            const isChanged = editValues[field.path] !== undefined && editValues[field.path] !== field.currentValue;
+            {/* ── Sections ── */}
+            {sections.map(([sectionName, sectionFields]) => {
+                const isCollapsed = collapsed[sectionName] ?? false;
+                const colors = SECTION_COLORS[sectionName] || DEFAULT_COLOR;
+                const sectionChanges = changesPerSection[sectionName] || 0;
 
-                            return (
-                                <div
-                                    key={field.path}
-                                    className={`bg-white rounded-xl border p-4 transition-colors ${
-                                        field.type === 'textarea' ? 'md:col-span-2' : ''
-                                    } ${isChanged ? 'border-amber-300 bg-amber-50/30' : 'border-gray-100'}`}
-                                >
-                                    <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
-                                        {field.label}
-                                    </label>
-                                    <div className="text-xs text-gray-400 mb-2 truncate">
-                                        Current: {field.currentValue || '(empty)'}
-                                    </div>
-                                    {field.type === 'textarea' ? (
-                                        <textarea
-                                            value={val}
-                                            onChange={e => setEditValues(prev => ({ ...prev, [field.path]: e.target.value }))}
-                                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                                            rows={3}
-                                        />
-                                    ) : (
-                                        <input
-                                            type={field.type}
-                                            value={val}
-                                            onChange={e => setEditValues(prev => ({ ...prev, [field.path]: e.target.value }))}
-                                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-300"
-                                        />
-                                    )}
-                                    {isChanged && (
-                                        <input
-                                            type="text"
-                                            placeholder="Reason for change (required)"
-                                            value={editComments[field.path] || ''}
-                                            onChange={e => setEditComments(prev => ({ ...prev, [field.path]: e.target.value }))}
-                                            className="w-full mt-2 px-3 py-2 border border-amber-200 rounded-lg text-xs bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-300"
-                                        />
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            ))}
+                return (
+                    <div key={sectionName} className="mb-4">
+                        {/* Section header — clickable to collapse/expand */}
+                        <button
+                            onClick={() => toggleSection(sectionName)}
+                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl ${colors.bg} border border-transparent hover:border-gray-200 transition-colors`}
+                        >
+                            <div className={`w-1 h-6 ${colors.bar} rounded-full flex-shrink-0`} />
+                            {isCollapsed
+                                ? <ChevronRight size={16} className="text-gray-400 flex-shrink-0" />
+                                : <ChevronDown size={16} className="text-gray-400 flex-shrink-0" />
+                            }
+                            <h3 className={`text-base font-bold ${colors.text} flex-1 text-left`}>{sectionName}</h3>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${colors.count}`}>
+                                {sectionFields.length} field{sectionFields.length !== 1 ? 's' : ''}
+                            </span>
+                            {sectionChanges > 0 && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">
+                                    {sectionChanges} changed
+                                </span>
+                            )}
+                        </button>
 
-            {/* Pending Changes Summary */}
+                        {/* Fields grid */}
+                        {!isCollapsed && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3 pl-4">
+                                {sectionFields.map(field => {
+                                    const val = editValues[field.path] ?? field.currentValue;
+                                    const isChanged = editValues[field.path] !== undefined && editValues[field.path] !== field.currentValue;
+
+                                    return (
+                                        <div
+                                            key={field.path}
+                                            className={`bg-white rounded-xl border p-4 transition-colors ${
+                                                field.type === 'textarea' ? 'md:col-span-2' : ''
+                                            } ${isChanged ? 'border-amber-300 bg-amber-50/30' : 'border-gray-100'}`}
+                                        >
+                                            <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
+                                                {field.label}
+                                            </label>
+                                            <div className="text-xs text-gray-400 mb-2 truncate" title={field.currentValue || '(empty)'}>
+                                                Current: {field.currentValue || '(empty)'}
+                                            </div>
+                                            {field.type === 'textarea' ? (
+                                                <textarea
+                                                    value={val}
+                                                    onChange={e => setEditValues(prev => ({ ...prev, [field.path]: e.target.value }))}
+                                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                                    rows={3}
+                                                />
+                                            ) : (
+                                                <input
+                                                    type={field.type}
+                                                    value={val}
+                                                    onChange={e => setEditValues(prev => ({ ...prev, [field.path]: e.target.value }))}
+                                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                                />
+                                            )}
+                                            {isChanged && (
+                                                <input
+                                                    type="text"
+                                                    placeholder="Reason for change (required)"
+                                                    value={editComments[field.path] || ''}
+                                                    onChange={e => setEditComments(prev => ({ ...prev, [field.path]: e.target.value }))}
+                                                    className="w-full mt-2 px-3 py-2 border border-amber-200 rounded-lg text-xs bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-300"
+                                                />
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                );
+            })}
+
+            {/* ── Pending Changes Summary ── */}
             {pendingEdits.length > 0 && (
                 <div className="mt-8 mb-12">
                     <h3 className="text-lg font-bold text-gray-900 mb-4">Pending Changes Summary</h3>
@@ -339,8 +684,8 @@ export default function EditOverview({ data, onBack, onSaved }: Props) {
                                 {pendingEdits.map((e, i) => (
                                     <tr key={i} className={!e.comment.trim() ? 'bg-red-50/50' : ''}>
                                         <td className="px-4 py-2 text-gray-700 font-medium">{e.label}</td>
-                                        <td className="px-4 py-2 text-gray-500 max-w-[200px] truncate">{e.old_value || '(empty)'}</td>
-                                        <td className="px-4 py-2 text-blue-700 font-semibold max-w-[200px] truncate">{e.new_value}</td>
+                                        <td className="px-4 py-2 text-gray-500 max-w-[200px] truncate" title={e.old_value}>{e.old_value || '(empty)'}</td>
+                                        <td className="px-4 py-2 text-blue-700 font-semibold max-w-[200px] truncate" title={e.new_value}>{e.new_value}</td>
                                         <td className="px-4 py-2 text-gray-600">
                                             {e.comment || <span className="text-red-500 text-xs font-medium">Comment required</span>}
                                         </td>
@@ -352,7 +697,7 @@ export default function EditOverview({ data, onBack, onSaved }: Props) {
                 </div>
             )}
 
-            {/* Bottom Save */}
+            {/* ── Bottom Save Bar ── */}
             <div className="sticky bottom-0 bg-white/90 backdrop-blur-sm border-t border-gray-100 py-4 -mx-6 px-6 flex justify-end gap-3">
                 <button
                     onClick={onBack}

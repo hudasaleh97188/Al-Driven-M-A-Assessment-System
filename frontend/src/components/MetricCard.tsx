@@ -1,6 +1,15 @@
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import { BarChart, Bar, Cell, Tooltip, ResponsiveContainer, XAxis } from 'recharts';
 
+/* ── Compact number formatter (K / M / B) ── */
+function fmtCompact(v: number): string {
+    const abs = Math.abs(v);
+    if (abs >= 1_000_000_000) return `${(v / 1_000_000_000).toFixed(2)}B`;
+    if (abs >= 1_000_000) return `${(v / 1_000_000).toFixed(2)}M`;
+    if (abs >= 1_000) return `${(v / 1_000).toFixed(1)}K`;
+    return v.toFixed(2);
+}
+
 interface MetricCardProps {
     title: React.ReactNode | string;
     value?: number | string | null;
@@ -26,53 +35,71 @@ export default function MetricCard({
 
     let deltaColor = 'text-gray-500';
     if (delta !== undefined) {
-        if (isNegativeGood) deltaColor = isPositiveDelta ? 'text-red-500' : 'text-green-500';
-        else deltaColor = isPositiveDelta ? 'text-green-500' : 'text-red-500';
+        if (isNegativeGood) deltaColor = isPositiveDelta ? 'text-red-500' : 'text-emerald-600';
+        else deltaColor = isPositiveDelta ? 'text-emerald-600' : 'text-red-500';
     }
 
+    /* Format the display value */
+    const displayValue = (() => {
+        if (value === undefined || value === null) return 'N/A';
+        if (typeof value === 'string') return `${value}${valueSuffix}`;
+        if (isRatio) return `${value.toFixed(2)}${valueSuffix}`;
+        return `${fmtCompact(value)}${valueSuffix}`;
+    })();
+
+    const isNA = displayValue === 'N/A';
+
     return (
-        <div className="bg-white rounded-2xl p-5 pb-8 flex flex-col justify-between shadow-sm border border-gray-100/80 hover:shadow-md transition-shadow duration-300 relative">
-            {badge && <div className="absolute bottom-2 right-3 z-10">{badge}</div>}
+        <div className="bg-white rounded-2xl p-5 pb-9 flex flex-col justify-between shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-300 relative group">
+            {badge && <div className="absolute bottom-2.5 right-3 z-10">{badge}</div>}
             <div>
-                <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-gray-400 uppercase tracking-wider text-[11px] font-semibold">{title}</h3>
+                <div className="flex items-center justify-between mb-1.5">
+                    <h3 className="text-gray-400 uppercase tracking-wider text-[10px] font-semibold leading-tight">{title}</h3>
                 </div>
-                <div className="text-2xl font-bold text-gray-900 tracking-tight">
-                    {value !== undefined && value !== null
-                        ? (typeof value === 'number' ? `${value.toLocaleString()}${valueSuffix}` : `${value}${valueSuffix}`)
-                        : 'N/A'}
+                <div className={`text-xl font-bold tracking-tight ${isNA ? 'text-gray-300 italic' : 'text-gray-900'}`}>
+                    {displayValue}
                 </div>
 
                 {delta !== undefined && (
-                    <div className="flex items-center mt-2.5">
-                        <span className={`px-2 py-0.5 rounded-full bg-gray-50 border border-gray-100 text-[11px] font-semibold flex items-center ${deltaColor}`}>
-                            {isPositiveDelta ? <TrendingUp size={12} className="mr-1" /> : <TrendingDown size={12} className="mr-1" />}
+                    <div className="flex items-center mt-2">
+                        <span className={`px-2 py-0.5 rounded-full bg-gray-50 border border-gray-100 text-[10px] font-semibold flex items-center gap-0.5 ${deltaColor}`}>
+                            {isPositiveDelta ? <TrendingUp size={11} className="shrink-0" /> : <TrendingDown size={11} className="shrink-0" />}
                             {Math.abs(delta).toFixed(1)}{deltaSuffix}
-                            {baselineYear && <span className="text-gray-400 ml-1 font-medium">vs {baselineYear}</span>}
+                            {baselineYear && <span className="text-gray-400 ml-0.5 font-medium">vs {baselineYear}</span>}
                         </span>
                     </div>
                 )}
             </div>
 
             {!hideChart && !isRatio && chartData && chartData.length > 0 && (
-                <div className="h-14 w-full mt-3">
+                <div className="h-16 w-full mt-3">
                     <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={chartData} margin={{ bottom: 0 }}>
+                        <BarChart data={chartData} margin={{ bottom: 0, left: 0, right: 0, top: 4 }}>
                             <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
                             <Tooltip
                                 cursor={{ fill: 'rgba(0,0,0,0.03)' }}
-                                contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#0f172a', fontSize: '12px', padding: '8px 12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)' }}
+                                contentStyle={{
+                                    backgroundColor: '#ffffff',
+                                    border: '1px solid #e2e8f0',
+                                    borderRadius: '10px',
+                                    color: '#0f172a',
+                                    fontSize: '11px',
+                                    padding: '6px 10px',
+                                    boxShadow: '0 4px 12px -2px rgb(0 0 0 / 0.08)',
+                                }}
                                 itemStyle={{ color: '#0f172a', fontWeight: 500, padding: 0 }}
-                                labelStyle={{ fontWeight: 600, color: '#64748b', marginBottom: '4px' }}
+                                labelStyle={{ fontWeight: 600, color: '#64748b', marginBottom: '2px' }}
                                 labelFormatter={(label) => `${label}`}
-                                formatter={(v: any) => [typeof v === 'number' ? `${v.toLocaleString()}${valueSuffix}` : v, title]}
+                                formatter={(v: any) => [typeof v === 'number' ? fmtCompact(v) : v, title]}
                             />
-                            <Bar dataKey={chartKey} radius={[3, 3, 0, 0]}>
+                            <Bar dataKey={chartKey} radius={[4, 4, 0, 0]} maxBarSize={28}>
                                 {chartData.map((_, i) => {
-                                    let c = '#cbd5e1';
+                                    let c = '#e2e8f0';
                                     if (i === chartData.length - 1) {
-                                        if (isNegativeGood) c = isPositiveDelta ? '#ef4444' : '#22c55e';
-                                        else c = isPositiveDelta ? '#22c55e' : '#ef4444';
+                                        if (isNegativeGood) c = isPositiveDelta ? '#fca5a5' : '#6ee7b7';
+                                        else c = isPositiveDelta ? '#6ee7b7' : '#fca5a5';
+                                    } else {
+                                        c = '#cbd5e1';
                                     }
                                     return <Cell key={i} fill={c} />;
                                 })}
