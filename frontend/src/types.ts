@@ -136,6 +136,9 @@ export interface FinancialEdit {
     statement_id: number;
     line_item_id: number | null;
     metric_name: string | null;
+    operation?: 'UPDATE' | 'ADD' | 'DELETE';
+    item_name?: string | null;
+    category?: 'Asset' | 'Liability' | 'Equity' | 'Income' | null;
     old_value: number;
     new_value: number;
     comment: string;

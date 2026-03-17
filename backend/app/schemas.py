@@ -304,7 +304,6 @@ STAGE2_SCHEMA = {
         },
     },
     "required": [
-        "company_overview", "financial_data",
         "is_publicly_listed", "quality_of_it",
     ],
 }

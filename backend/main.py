@@ -233,7 +233,10 @@ def delete_company_analysis(company_name: str):
 class EditItem(BaseModel):
     line_item_id: Optional[int] = None
     metric_name: Optional[str] = None
-    old_value: float
+    operation: str = "UPDATE" # UPDATE, ADD, DELETE
+    item_name: Optional[str] = None
+    category: Optional[str] = None
+    old_value: float = 0.0
     new_value: float
     comment: str
 
@@ -257,6 +260,9 @@ def bulk_edit_financials(request: BulkEditRequest):
             statement_id=request.statement_id,
             line_item_id=edit.line_item_id,
             metric_name=edit.metric_name,
+            operation=edit.operation,
+            item_name=edit.item_name,
+            category=edit.category,
             old_value=edit.old_value,
             new_value=edit.new_value,
             comment=edit.comment,

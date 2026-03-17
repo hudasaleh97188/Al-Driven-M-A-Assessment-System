@@ -142,8 +142,11 @@ Task: Enrich the provided stage 1 extraction for "{company_name}".
 
 1. MISSING DATA CORRECTION:
    Review the JSON below. If you see null, -1, or empty arrays in financial_data or company_overview,
-   use Google Search to find and fill them (press releases, news, LinkedIn).
-   Return the COMPLETE company_overview and financial_data arrays in your response, patching any holes.
+   use Google Search to find and fill them.
+   IMPORTANT: Return ONLY the fields that you have enriched or corrected. 
+   - If a year in `financial_data` has no new data, omit it from your response.
+   - If a field in `company_overview` is already correct, omit it.
+   - For `financial_data`, ensure you include the `year` for any year-object you are patching.
 
 2. LISTING STATUS:
    Determine whether "{company_name}" is publicly listed on any stock exchange.

@@ -81,9 +81,9 @@ def _extract_company_data(analysis: dict) -> dict:
         ],
         "strategic_partners": overview.get("strategic_partners", []),
         "it_details": {
-            "core_systems": ", ".join(quality_of_it.get("core_banking_systems", [])) if quality_of_it else "",
-            "digital_adoption": quality_of_it.get("digital_channel_adoption", "") if quality_of_it else "",
-            "recent_upgrades": ", ".join(quality_of_it.get("system_upgrades", [])) if quality_of_it else "",
+            "core_banking_systems": quality_of_it.get("core_banking_systems", []) if quality_of_it else [],
+            "digital_channel_adoption": quality_of_it.get("digital_channel_adoption", "") if quality_of_it else "",
+            "system_upgrades": quality_of_it.get("system_upgrades", []) if quality_of_it else [],
         },
         "competitive_position": {
             "market_share_data": competitive_pos.get("market_share_data", ""),
@@ -206,12 +206,18 @@ def _summarise_it(it: dict) -> str:
     if not it:
         return "No IT data available."
     parts = []
-    if it.get("core_systems"):
-        parts.append(f"Core: {it['core_systems']}")
-    if it.get("digital_adoption"):
-        parts.append(f"Digital: {it['digital_adoption']}")
-    if it.get("recent_upgrades"):
-        parts.append(f"Upgrades: {it['recent_upgrades']}")
+    core = it.get("core_banking_systems", [])
+    if core:
+        parts.append(f"Core: {', '.join(core) if isinstance(core, list) else core}")
+    
+    digital = it.get("digital_channel_adoption")
+    if digital:
+        parts.append(f"Digital: {digital}")
+    
+    upgrades = it.get("system_upgrades", [])
+    if upgrades:
+        parts.append(f"Upgrades: {', '.join(upgrades) if isinstance(upgrades, list) else upgrades}")
+    
     return "; ".join(parts) if parts else "Limited IT data."
 
 

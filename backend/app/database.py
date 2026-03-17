@@ -108,6 +108,9 @@ CREATE TABLE IF NOT EXISTS financial_edits (
     statement_id    INTEGER NOT NULL REFERENCES financial_statements(id) ON DELETE CASCADE,
     line_item_id    INTEGER REFERENCES financial_line_items(id) ON DELETE SET NULL,
     metric_name     TEXT,
+    operation       TEXT DEFAULT 'UPDATE' CHECK(operation IN ('UPDATE', 'ADD', 'DELETE')),
+    item_name       TEXT,
+    category        TEXT,
     old_value       REAL,
     new_value       REAL,
     comment         TEXT NOT NULL,
@@ -161,6 +164,16 @@ def init_db() -> None:
     """Create tables if they don't already exist."""
     with _get_conn() as conn:
         conn.executescript(SCHEMA_SQL)
+        
+        # Migration: Add new columns to financial_edits if they don't exist
+        try:
+            conn.execute("ALTER TABLE financial_edits ADD COLUMN operation TEXT DEFAULT 'UPDATE'")
+            conn.execute("ALTER TABLE financial_edits ADD COLUMN item_name TEXT")
+            conn.execute("ALTER TABLE financial_edits ADD COLUMN category TEXT")
+        except sqlite3.OperationalError:
+            # Columns already exist
+            pass
+            
         conn.commit()
     logger.info("[DB] Database initialised at {}", str(DB_PATH))
     _seed_currency_rates()
@@ -382,9 +395,80 @@ def get_financial_statements(run_id: int) -> List[Dict]:
             ).fetchall()
             stmt_dict["edit_history"] = [dict(e) for e in edits]
 
+            # Apply overlays
+            stmt_dict = apply_financial_edits(stmt_dict)
+
             result.append(stmt_dict)
 
         return result
+
+
+def apply_financial_edits(stmt_dict: dict) -> dict:
+    """
+    Overlay financial_edits onto the base statement data.
+    This allows 'Add' and 'Delete' logic without mutating the original line items.
+    """
+    edits = stmt_dict.get("edit_history", [])
+    if not edits:
+        return stmt_dict
+
+    # Sort by edited_at ascending to apply changes in sequence
+    sorted_edits = sorted(edits, key=lambda x: x["edited_at"])
+
+    line_items = {item["id"]: item for item in stmt_dict.get("line_items", [])}
+    metrics = stmt_dict.get("metrics", {})
+    
+    # Track deleted item IDs and names for new items
+    deleted_line_item_ids = set()
+    added_line_items = [] # list of dicts
+
+    for edit in sorted_edits:
+        op = edit.get("operation", "UPDATE")
+        li_id = edit.get("line_item_id")
+        m_name = edit.get("metric_name")
+        val = edit.get("new_value")
+
+        if op == "UPDATE":
+            if li_id and li_id in line_items:
+                line_items[li_id]["value_reported"] = val
+                line_items[li_id]["data_source"] = "Manually Edited"
+            elif m_name:
+                metrics[m_name] = val
+        
+        elif op == "DELETE":
+            if li_id:
+                deleted_line_item_ids.add(li_id)
+            elif m_name:
+                # We don't really 'delete' top level metrics usually, but if we do:
+                metrics.pop(m_name, None)
+        
+        elif op == "ADD":
+            # For ADD, we expect category and item_name
+            cat = edit.get("category")
+            name = edit.get("item_name")
+            if cat and name:
+                added_line_items.append({
+                    "id": None, # Indicates it's an overlay item
+                    "statement_id": stmt_dict["id"],
+                    "category": cat,
+                    "item_name": name,
+                    "value_reported": val,
+                    "sort_order": 999, # Put at bottom
+                    "is_total": False,
+                    "data_source": "Manually Added"
+                })
+
+    # Filter out deleted items and combine with added items
+    final_line_items = [
+        item for item in stmt_dict.get("line_items", []) 
+        if item["id"] not in deleted_line_item_ids
+    ]
+    final_line_items.extend(added_line_items)
+
+    stmt_dict["line_items"] = final_line_items
+    stmt_dict["metrics"] = metrics
+    
+    return stmt_dict
 
 
 def get_statement_by_id(statement_id: int) -> Optional[Dict]:
@@ -421,6 +505,9 @@ def get_statement_by_id(statement_id: int) -> Optional[Dict]:
         ).fetchall()
         stmt_dict["edit_history"] = [dict(e) for e in edits]
 
+        # Apply overlays
+        stmt_dict = apply_financial_edits(stmt_dict)
+
         return stmt_dict
 
 
@@ -436,6 +523,9 @@ def save_financial_edit(
     new_value: float,
     comment: str,
     username: str = "admin",
+    operation: str = "UPDATE",
+    item_name: Optional[str] = None,
+    category: Optional[str] = None,
 ) -> bool:
     """Save a financial edit with audit trail."""
     with _get_conn() as conn:
@@ -446,31 +536,26 @@ def save_financial_edit(
 
         conn.execute(
             """INSERT INTO financial_edits
-               (statement_id, line_item_id, metric_name, old_value, new_value, comment, edited_by)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (statement_id, line_item_id, metric_name, old_value, new_value, comment, user_id),
+               (statement_id, line_item_id, metric_name, operation, item_name, category, 
+                old_value, new_value, comment, edited_by)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                statement_id, line_item_id, metric_name, operation, item_name, category,
+                old_value, new_value, comment, user_id
+            ),
         )
 
-        if line_item_id:
-            conn.execute(
-                "UPDATE financial_line_items SET value_reported = ?, data_source = 'Manually Edited' "
-                "WHERE id = ?",
-                (new_value, line_item_id),
-            )
-        elif metric_name:
-            conn.execute(
-                """INSERT OR REPLACE INTO financial_metrics
-                   (statement_id, metric_name, metric_value, is_calculated, data_source)
-                   VALUES (?, ?, ?, 0, 'Manually Edited')""",
-                (statement_id, metric_name, new_value),
-            )
+        # Note: We NO LONGER mutate financial_line_items or financial_metrics directly.
+        # Everything is applied via apply_financial_edits (overlay approach).
+        # This preserves the original extracted data for audit trail/revert.
 
         conn.commit()
 
     logger.info(
-        "[DB_WRITE] save_financial_edit stmt_id={} metric={} line_item={} "
+        "[DB_WRITE] save_financial_edit stmt_id={} op={} metric={} item='{}' "
         "old={} new={} user='{}'",
-        statement_id, metric_name, line_item_id, old_value, new_value, username,
+        statement_id, operation, metric_name, item_name or line_item_id, 
+        old_value, new_value, username,
     )
     return True
 

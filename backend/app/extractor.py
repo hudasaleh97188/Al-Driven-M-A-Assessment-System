@@ -189,21 +189,21 @@ def enrich_with_web_and_it(
     prompt = build_stage2_prompt(company_name, base_data)
 
     logger.info(
-        "[LLM_REQUEST] Stage 2 | model=gemini-3-flash-preview | company='{}' | tools=[GoogleSearch]",
+        "[LLM_REQUEST] Stage 2 | model=gemini-3.1-pro-preview | company='{}' | tools=[GoogleSearch]",
         company_name,
     )
     logger.debug("[LLM_REQUEST] Stage 2 – Full prompt:\n{}", prompt)
 
     try:
         response = client.models.generate_content(
-            model="gemini-3-flash-preview",
+            model="gemini-3.1-pro-preview",
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=STAGE2_SCHEMA,
                 tools=[types.Tool(google_search=types.GoogleSearch())],
                 temperature=0,
-                thinking_config=types.ThinkingConfig(thinking_level="MEDIUM"),
+                thinking_config=types.ThinkingConfig(thinking_level="HIGH"),
             ),
         )
     except Exception:
