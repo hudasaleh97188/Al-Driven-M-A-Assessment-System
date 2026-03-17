@@ -540,7 +540,9 @@ function RatingTab({ data, compData, loadingComp }: { data: AnalysisData, compDa
                 /* Build conversion rates map */
                 const rateMap: Record<string, number> = {};
                 for (const c of compData.companies) {
-                    const key = `${c.currency}_${c.year}`;
+                    // Use original_currency if available, else fallback to currency
+                    const curr = c.original_currency || c.currency;
+                    const key = `${curr}_${c.year}`;
                     rateMap[key] = c.usd_rate || 1;
                 }
 

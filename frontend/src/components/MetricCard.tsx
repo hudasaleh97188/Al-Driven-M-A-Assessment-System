@@ -1,4 +1,4 @@
-import { TrendingUp, TrendingDown } from 'lucide-react';
+import { TrendingUp, TrendingDown, Info } from 'lucide-react';
 import { BarChart, Bar, Cell, Tooltip, ResponsiveContainer, XAxis } from 'recharts';
 
 /* ── Compact number formatter (K / M / B) ── */
@@ -23,11 +23,13 @@ interface MetricCardProps {
     latestYear?: number;
     badge?: React.ReactNode;
     hideChart?: boolean;
+    tooltip?: string;
 }
 
 export default function MetricCard({
     title, value, delta, isRatio = false, isNegativeGood = false,
-    chartData, chartKey = 'val', baselineYear, suffix, badge, hideChart = false
+    chartData, chartKey = 'val', baselineYear, suffix, badge, hideChart = false,
+    tooltip
 }: MetricCardProps) {
     const isPositiveDelta = typeof delta === 'number' && delta >= 0;
     const valueSuffix = suffix ?? (isRatio ? '%' : '');
@@ -54,7 +56,18 @@ export default function MetricCard({
             {badge && <div className="absolute bottom-2.5 right-3 z-10">{badge}</div>}
             <div>
                 <div className="flex items-center justify-between mb-1.5">
-                    <h3 className="text-gray-400 uppercase tracking-wider text-[10px] font-semibold leading-tight">{title}</h3>
+                    <div className="flex items-center gap-1.5">
+                        <h3 className="text-gray-400 uppercase tracking-wider text-[10px] font-semibold leading-tight">{title}</h3>
+                        {tooltip && (
+                            <div className="relative group/tooltip">
+                                <Info size={12} className="text-gray-300 hover:text-gray-400 cursor-help transition-colors" />
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-white border border-gray-100 rounded-lg shadow-lg opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity duration-200 z-[100] text-[10px] font-medium text-gray-600 leading-relaxed text-center">
+                                    {tooltip}
+                                    <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-white" />
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
                 <div className={`text-xl font-bold tracking-tight ${isNA ? 'text-gray-300 italic' : 'text-gray-900'}`}>
                     {displayValue}

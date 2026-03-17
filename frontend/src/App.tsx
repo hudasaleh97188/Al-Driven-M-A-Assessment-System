@@ -195,33 +195,35 @@ export default function App() {
                         {/* Company header */}
                         <div className="mb-8">
                             <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight mb-2 capitalize">{data.company_name}</h1>
-                            <div className="flex flex-wrap gap-2">
-                                {data.company_id && (
-                                    <span className="px-3 py-1 bg-violet-50 text-violet-700 rounded-full text-xs font-medium border border-violet-100">
-                                        ID: {data.company_id}
-                                    </span>
-                                )}
-                                {data.currency && (
-                                    <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium border border-blue-100">
-                                        {data.currency}
-                                    </span>
-                                )}
-                                {data.financial_data?.length > 0 && (
-                                    <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">
-                                        {data.financial_data[0].year} – {data.financial_data[data.financial_data.length - 1].year}
-                                    </span>
-                                )}
-                                {data.company_overview?.operational_scale?.number_of_employees && (
-                                    <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">
-                                        {(Math.floor(data.company_overview.operational_scale.number_of_employees / 10) * 10).toLocaleString()}+ employees
-                                    </span>
-                                )}
-                                {data.company_overview?.countries_of_operation && (
-                                    <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">
-                                        {data.company_overview.countries_of_operation.length} countries
-                                    </span>
-                                )}
-                            </div>
+                            {tab !== 'rating' && (
+                                <div className="flex flex-wrap gap-2">
+                                    {data.company_id && (
+                                        <span className="px-3 py-1 bg-violet-50 text-violet-700 rounded-full text-xs font-medium border border-violet-100">
+                                            ID: {data.company_id}
+                                        </span>
+                                    )}
+                                    {data.currency && (
+                                        <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium border border-blue-100">
+                                            {data.currency}
+                                        </span>
+                                    )}
+                                    {data.financial_data?.length > 0 && (
+                                        <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">
+                                            {data.financial_data[0].year} – {data.financial_data[data.financial_data.length - 1].year}
+                                        </span>
+                                    )}
+                                    {data.company_overview?.operational_scale?.number_of_employees && (
+                                        <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">
+                                            {(Math.floor(data.company_overview.operational_scale.number_of_employees / 10) * 10).toLocaleString()}+ employees
+                                        </span>
+                                    )}
+                                    {data.company_overview?.countries_of_operation && (
+                                        <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">
+                                            {data.company_overview.countries_of_operation.length} countries
+                                        </span>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
                         {/* Active page */}

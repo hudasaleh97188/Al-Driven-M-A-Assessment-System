@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { TrendingUp, TrendingDown, Edit3, Briefcase, ShieldAlert, CreditCard } from 'lucide-react';
+import { TrendingUp, TrendingDown, Briefcase, ShieldAlert, CreditCard } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { SourceBadge } from './BusinessOverview';
 import MetricCard from '../components/MetricCard';
@@ -134,10 +134,10 @@ export default function FinancialHealth({ data, onEditClick }: Props) {
     const equities = stmt.line_items.filter((i: FinancialLineItem) => i.category === 'Equity');
     const incomeItems = stmt.line_items.filter((i: FinancialLineItem) => i.category === 'Income');
 
-    /* GLP / Equity ratio — safe computation */
-    const glpEquityDisplay = (() => {
-        if (m.gross_loan_portfolio != null && m.total_equity != null && m.total_equity !== 0) {
-            return `${((m.gross_loan_portfolio / m.total_equity) * 100).toFixed(1)}%`;
+    /* Equity / GLP ratio — safe computation */
+    const equityGlpDisplay = (() => {
+        if (m.total_equity != null && m.gross_loan_portfolio != null && m.gross_loan_portfolio !== 0) {
+            return `${((m.total_equity / m.gross_loan_portfolio) * 100).toFixed(1)}%`;
         }
         return 'N/A';
     })();
@@ -151,7 +151,7 @@ export default function FinancialHealth({ data, onEditClick }: Props) {
                         onClick={() => onEditClick(stmt.id)}
                         className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm"
                     >
-                        <Edit3 size={14} />
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                         Edit Metrics
                     </button>
                 )}
@@ -227,7 +227,14 @@ export default function FinancialHealth({ data, onEditClick }: Props) {
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                     <MetricCard title="Op. Income" value={m.total_operating_revenue} delta={yoyChange('total_operating_revenue')} chartData={getChartData('total_operating_revenue')} badge={metricBadge('total_operating_revenue')} />
                     <MetricCard title="Net Interest Inc." value={m.net_interests} delta={yoyChange('net_interests')} chartData={getChartData('net_interests')} badge={metricBadge('net_interests')} />
-                    <MetricCard title="Net Income" value={m.pat} delta={yoyChange('pat')} chartData={getChartData('pat')} badge={metricBadge('pat')} />
+                    <MetricCard 
+                        title="Net Income" 
+                        value={m.pat} 
+                        delta={yoyChange('pat')} 
+                        chartData={getChartData('pat')} 
+                        badge={metricBadge('pat')} 
+                        tooltip="Covers overall performance including any discontinued operations"
+                    />
                     <MetricCard title="Net Int. Margin" value={r.nim_percent} delta={yoyChange('nim_percent', true)} isRatio badge={ratioBadge('net_interests', 'total_assets')} />
                     <MetricCard title="Int. Coverage" value={r.interest_coverage_ratio} delta={yoyChange('interest_coverage_ratio', true)} isRatio suffix="x" badge={ratioBadge('ebitda', 'net_interests')} />
                     <MetricCard title="Cost to Income" value={r.cost_to_income_ratio_percent} delta={yoyChange('cost_to_income_ratio_percent', true)} isRatio isNegativeGood badge={ratioBadge('total_operating_revenue', 'pat')} />
@@ -272,7 +279,7 @@ export default function FinancialHealth({ data, onEditClick }: Props) {
                         badge={ratioBadge('debts_to_clients', 'debts_to_financial_institutions')}
                     />
                     <MetricCard title="Disbursals" value={m.disbursals} delta={yoyChange('disbursals')} chartData={getChartData('disbursals')} badge={metricBadge('disbursals')} />
-                    <MetricCard title="GLP / Equity" value={glpEquityDisplay} hideChart badge={ratioBadge('gross_loan_portfolio', 'total_equity')} />
+                    <MetricCard title="Equity / GLP" value={equityGlpDisplay} hideChart badge={ratioBadge('total_equity', 'gross_loan_portfolio')} />
                 </div>
             </section>
 

@@ -432,25 +432,21 @@ def get_comparison_data():
                 currency, year, data["company_name"],
             )
 
-        # Convert every numeric metric to USD millions
-        usd_metrics: dict = {}
+        # Return every numeric metric as raw value
+        raw_values: dict = {}
         for metric_name, val in raw_metrics.items():
             if metric_name in _NON_MONETARY or not isinstance(val, (int, float)):
-                usd_metrics[metric_name] = val
-            elif rate is not None:
-                usd_metrics[metric_name] = round((val * rate) / 1_000_000, 4)
+                raw_values[metric_name] = val
             else:
-                # No rate at all — pass raw value through with a flag so the
-                # frontend can warn rather than silently showing wrong numbers
-                usd_metrics[metric_name] = val
+                raw_values[metric_name] = val
 
         result.append({
             "company_name": data["company_name"],
             "original_currency": currency,
             "year": year,
             "usd_rate": rate,
-            "currency": "USDm",          # all metrics below are now in USD millions
-            "metrics": usd_metrics,
+            "currency": currency,          # return actual currency, e.g. "EUR"
+            "metrics": raw_values,
             "fx_fallback": rate is None,  # True → frontend should show a warning
         })
 

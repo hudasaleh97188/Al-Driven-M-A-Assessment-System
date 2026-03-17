@@ -313,16 +313,20 @@ def _save_normalized_financial_data(
         for metric_name in _RAW_METRIC_FIELDS:
             value = fh.get(metric_name)
             if value is not None and value != -1:
-                try:
-                    conn.execute(
-                        """INSERT OR REPLACE INTO financial_metrics
-                           (statement_id, metric_name, metric_value, is_calculated, data_source)
-                           VALUES (?, ?, ?, 0, 'Files Upload')""",
-                        (stmt_id, metric_name, float(value)),
-                    )
-                except (ValueError, TypeError):
-                    # credit_rating is a string — skip numeric insert
-                    pass
+                # Handle credit_rating as string, others as float if possible
+                save_val = value
+                if metric_name != "credit_rating":
+                    try:
+                        save_val = float(value)
+                    except (ValueError, TypeError):
+                        pass
+
+                conn.execute(
+                    """INSERT OR REPLACE INTO financial_metrics
+                       (statement_id, metric_name, metric_value, is_calculated, data_source)
+                       VALUES (?, ?, ?, 0, 'Files Upload')""",
+                    (stmt_id, metric_name, save_val),
+                )
 
         # ── Grouped Line Items ─────────────────────────────────────────────
         # Assets, Liabilities, Equity, and Income Statement line items.
