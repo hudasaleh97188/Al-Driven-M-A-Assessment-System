@@ -122,43 +122,35 @@ def _convert_to_usd(company: dict) -> None:
     Convert PAT, equity, and GLP from original currency to **USD millions**
     using the rate stored in ``currency_rates``.
 
-    Mutates the dict in-place.  If no rate is found the values are left
-    unchanged and a warning is logged.
+    ``get_currency_rate()`` already falls back to the latest available year
+    when an exact (currency, year) match is absent, so no manual offset logic
+    is needed here.
+
+    Mutates the dict in-place.  If no rate is found (currency entirely absent
+    from the table) the raw values are divided by 1 M as a best-effort and a
+    warning is logged.
     """
-    currency = company.get("currency", "USD")
+    currency = company.get("currency", "USD").upper().strip()
     year = company.get("latest_year", 0)
     name = company["company_name"]
 
-    # If already USD, just convert to millions
-    if currency.upper() in ("USD", "USDM"):
+    # If already USD (or USD-millions sentinel), just scale to millions
+    if currency in ("USD", "USDM"):
         for key in _FINANCIAL_KEYS:
             val = company.get(key)
             if val is not None:
                 company[key] = val / 1_000_000
-        logger.info(
-            "[PEER_RATING] '{}': currency=USD – divided by 1M for USDm",
-            name,
-        )
+        logger.info("[PEER_RATING] '{}': currency=USD – divided by 1M → USDm", name)
         return
 
-    rate = get_currency_rate(currency, year)
-    if rate is None:
-        # Try adjacent years as fallback
-        for offset in (1, -1, 2, -2):
-            rate = get_currency_rate(currency, year + offset)
-            if rate is not None:
-                logger.warning(
-                    "[PEER_RATING] '{}': no rate for {}/{}, using {}/{} (rate={})",
-                    name, currency, year, currency, year + offset, rate,
-                )
-                break
+    rate = get_currency_rate(currency, year)  # falls back to latest year internally
 
     if rate is None:
         logger.warning(
-            "[PEER_RATING] '{}': no USD rate for {}/{} – values left as-is (may skew scores)",
-            name, currency, year,
+            "[PEER_RATING] '{}': currency '{}' not in currency_rates at all "
+            "– values divided by 1M only (may skew scores)",
+            name, currency,
         )
-        # Still convert to millions as a best-effort
         for key in _FINANCIAL_KEYS:
             val = company.get(key)
             if val is not None:

@@ -371,9 +371,19 @@ def get_comparison_data():
     """
     Get comparison data for all analysed companies.
 
-    Returns raw metrics per company (latest year) plus currency rates.
-    Ratios are computed on the frontend.
+    All numeric financial metrics are converted to **USD millions** here on
+    the backend so the frontend can compare companies on a like-for-like basis
+    regardless of their original reporting currency.
+
+    Conversion uses:
+      1. The currency extracted by Stage-1 LLM (stored on financial_statements).
+      2. The reporting year of the latest financial statement.
+      3. ``get_currency_rate()`` which falls back to the latest available year
+         when an exact (currency, year) entry is absent.
     """
+    # Non-monetary metrics that must NOT be multiplied by a FX rate
+    _NON_MONETARY = {"credit_rating"}
+
     analyses = get_all_analyses()
     result: list[dict] = []
 
@@ -389,18 +399,53 @@ def get_comparison_data():
         if not stmts:
             continue
 
-        latest_stmt = stmts[-1]  # last = latest year
-        metrics = latest_stmt.get("metrics", {})
-        currency = latest_stmt.get("currency", data.get("currency", "USD"))
+        # stmts are ordered ASC by year; last entry is the latest year
+        latest_stmt = stmts[-1]
+        raw_metrics = latest_stmt.get("metrics", {})
+
+        # Currency comes from the LLM Stage-1 extraction (stored per statement)
+        # Fall back to the run-level currency, then USD
+        currency = (
+            latest_stmt.get("currency")
+            or data.get("currency")
+            or "USD"
+        ).upper().strip()
+
         year = latest_stmt.get("year", 0)
-        rate = get_currency_rate(currency, year)
+
+        # Resolve FX rate (falls back to latest available year automatically)
+        if currency in ("USD", "USDM"):
+            rate = 1.0
+        else:
+            rate = get_currency_rate(currency, year)
+
+        if rate is None:
+            logger.warning(
+                "[API] /comparison – no FX rate for {}/{} for '{}'; "
+                "metrics kept in original currency units",
+                currency, year, data["company_name"],
+            )
+
+        # Convert every numeric metric to USD millions
+        usd_metrics: dict = {}
+        for metric_name, val in raw_metrics.items():
+            if metric_name in _NON_MONETARY or not isinstance(val, (int, float)):
+                usd_metrics[metric_name] = val
+            elif rate is not None:
+                usd_metrics[metric_name] = round((val * rate) / 1_000_000, 4)
+            else:
+                # No rate at all — pass raw value through with a flag so the
+                # frontend can warn rather than silently showing wrong numbers
+                usd_metrics[metric_name] = val
 
         result.append({
             "company_name": data["company_name"],
-            "currency": currency,
+            "original_currency": currency,
             "year": year,
             "usd_rate": rate,
-            "metrics": metrics,
+            "currency": "USDm",          # all metrics below are now in USD millions
+            "metrics": usd_metrics,
+            "fx_fallback": rate is None,  # True → frontend should show a warning
         })
 
     rates = get_all_currency_rates()

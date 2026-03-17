@@ -163,7 +163,7 @@ def init_db() -> None:
         conn.executescript(SCHEMA_SQL)
         conn.commit()
     logger.info("[DB] Database initialised at {}", str(DB_PATH))
-    _seed_sample_data()
+    _seed_currency_rates()
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -645,13 +645,41 @@ def _set_nested_value(data: dict, path: str, value: str) -> None:
 # ═══════════════════════════════════════════════════════════════════════════
 
 def get_currency_rate(currency: str, year: int) -> Optional[float]:
-    """Get the USD conversion rate for a currency and year."""
+    """Get the USD conversion rate for a currency and year.
+
+    Lookup order:
+      1. Exact (currency, year) match.
+      2. If not found, fall back to the *latest* year available for that
+         currency (so a 2025 report still gets converted even if only 2024
+         rates are seeded).
+    Returns None only when the currency is entirely absent from the table.
+    """
+    currency = currency.upper().strip()
     with _get_conn() as conn:
+        # 1. Exact match
         row = conn.execute(
-            "SELECT rate_to_usd FROM currency_rates WHERE currency = ? AND year = ?",
+            "SELECT rate_to_usd, year FROM currency_rates WHERE currency = ? AND year = ?",
             (currency, year),
         ).fetchone()
-    return row["rate_to_usd"] if row else None
+        if row:
+            return row["rate_to_usd"]
+
+        # 2. Latest available year for this currency
+        row = conn.execute(
+            "SELECT rate_to_usd, year FROM currency_rates "
+            "WHERE currency = ? ORDER BY year DESC LIMIT 1",
+            (currency,),
+        ).fetchone()
+
+    if row:
+        logger.warning(
+            "[DB] No rate for {}/{} – using latest available year {} (rate={})",
+            currency, year, row["year"], row["rate_to_usd"],
+        )
+        return row["rate_to_usd"]
+
+    logger.warning("[DB] Currency '{}' not found in currency_rates at all", currency)
+    return None
 
 
 def upsert_currency_rate(
@@ -817,567 +845,84 @@ def delete_company(company_name: str) -> bool:
 # SAMPLE DATA SEEDING
 # ═══════════════════════════════════════════════════════════════════════════
 
-def _seed_sample_data() -> None:
-    """Seed the database with realistic sample data if empty."""
+
+def _seed_currency_rates() -> None:
+    """
+    Ensure the currency_rates table is populated with annual USD conversion
+    rates for 2023, 2024 and 2025.
+
+    Uses INSERT OR IGNORE so that any rates already entered via the admin UI
+    are never overwritten — only genuinely missing rows are added.
+
+    Rates are annual averages sourced from IMF / World Bank / central banks.
+    Pegged currencies (AED, SAR, BHD, OMR, QAR, JOD) carry the same rate
+    across all years.  Volatile currencies (EGP, NGN, TRY, GHS, ETB) reflect
+    real-world devaluations.
+    """
+    RATES = [
+        # ── Gulf / MENA ──────────────────────────────────────────────────────
+        # UAE Dirham (pegged 3.6725 / USD)
+        ("AED", 2023, 0.2723), ("AED", 2024, 0.2723), ("AED", 2025, 0.2723),
+        # Saudi Riyal (pegged 3.75 / USD)
+        ("SAR", 2023, 0.2667), ("SAR", 2024, 0.2667), ("SAR", 2025, 0.2667),
+        # Bahraini Dinar (pegged 0.376 / USD)
+        ("BHD", 2023, 2.6596), ("BHD", 2024, 2.6596), ("BHD", 2025, 2.6596),
+        # Kuwaiti Dinar
+        ("KWD", 2023, 3.2573), ("KWD", 2024, 3.2520), ("KWD", 2025, 3.2500),
+        # Omani Rial (pegged 0.3845 / USD)
+        ("OMR", 2023, 2.5974), ("OMR", 2024, 2.5974), ("OMR", 2025, 2.5974),
+        # Qatari Riyal (pegged 3.64 / USD)
+        ("QAR", 2023, 0.2747), ("QAR", 2024, 0.2747), ("QAR", 2025, 0.2747),
+        # Jordanian Dinar (pegged ~0.709 / USD)
+        ("JOD", 2023, 1.4104), ("JOD", 2024, 1.4104), ("JOD", 2025, 1.4104),
+        # Egyptian Pound (large devaluations 2023 → 2024)
+        ("EGP", 2023, 0.0324), ("EGP", 2024, 0.0204), ("EGP", 2025, 0.0200),
+        # Moroccan Dirham
+        ("MAD", 2023, 0.09930), ("MAD", 2024, 0.10060), ("MAD", 2025, 0.10000),
+        # Tunisian Dinar
+        ("TND", 2023, 0.32300), ("TND", 2024, 0.31980), ("TND", 2025, 0.32000),
+        # Lebanese Pound
+        ("LBP", 2023, 0.0000111), ("LBP", 2024, 0.0000111), ("LBP", 2025, 0.0000111),
+        # Turkish Lira
+        ("TRY", 2023, 0.03840), ("TRY", 2024, 0.03090), ("TRY", 2025, 0.02780),
+        # ── Sub-Saharan Africa ───────────────────────────────────────────────
+        # Nigerian Naira
+        ("NGN", 2023, 0.001294), ("NGN", 2024, 0.000625), ("NGN", 2025, 0.000600),
+        # Kenyan Shilling
+        ("KES", 2023, 0.007000), ("KES", 2024, 0.007750), ("KES", 2025, 0.007700),
+        # Ghanaian Cedi
+        ("GHS", 2023, 0.08400), ("GHS", 2024, 0.06280), ("GHS", 2025, 0.06000),
+        # South African Rand
+        ("ZAR", 2023, 0.05400), ("ZAR", 2024, 0.05490), ("ZAR", 2025, 0.05400),
+        # Ethiopian Birr
+        ("ETB", 2023, 0.01810), ("ETB", 2024, 0.00760), ("ETB", 2025, 0.00720),
+        # Tanzanian Shilling
+        ("TZS", 2023, 0.000402), ("TZS", 2024, 0.000388), ("TZS", 2025, 0.000385),
+        # Ugandan Shilling
+        ("UGX", 2023, 0.000268), ("UGX", 2024, 0.000268), ("UGX", 2025, 0.000265),
+        # Rwandan Franc
+        ("RWF", 2023, 0.000830), ("RWF", 2024, 0.000790), ("RWF", 2025, 0.000780),
+        # ── South / South-East Asia ──────────────────────────────────────────
+        # Indian Rupee
+        ("INR", 2023, 0.012050), ("INR", 2024, 0.012000), ("INR", 2025, 0.011650),
+        # Pakistani Rupee
+        ("PKR", 2023, 0.003520), ("PKR", 2024, 0.003580), ("PKR", 2025, 0.003550),
+        # Bangladeshi Taka
+        ("BDT", 2023, 0.009100), ("BDT", 2024, 0.009130), ("BDT", 2025, 0.009100),
+        # Indonesian Rupiah
+        ("IDR", 2023, 0.0000652), ("IDR", 2024, 0.0000618), ("IDR", 2025, 0.0000610),
+        # ── Major global currencies ──────────────────────────────────────────
+        ("USD", 2023, 1.0000), ("USD", 2024, 1.0000), ("USD", 2025, 1.0000),
+        ("EUR", 2023, 1.0813), ("EUR", 2024, 1.0816), ("EUR", 2025, 1.0500),
+        ("GBP", 2023, 1.2437), ("GBP", 2024, 1.2773), ("GBP", 2025, 1.2600),
+    ]
+
     with _get_conn() as conn:
-        count = conn.execute("SELECT COUNT(*) as c FROM companies").fetchone()["c"]
-        if count > 0:
-            return
-
-        logger.info("[DB] Seeding sample data …")
-
-        # ── Company 1: Emirates NBD ────────────────────────────────────────
-        conn.execute(
-            "INSERT INTO companies (id, name, industry) VALUES (1, 'Emirates NBD', 'Banking')"
+        conn.executemany(
+            "INSERT OR IGNORE INTO currency_rates (currency, year, rate_to_usd) "
+            "VALUES (?, ?, ?)",
+            RATES,
         )
-
-        result_json = json.dumps({
-            "company_name": "Emirates NBD",
-            "currency": "AED",
-            "company_overview": {
-                "description_of_products_and_services": (
-                    "Emirates NBD is one of the largest banking groups in the Middle East, "
-                    "offering retail banking, corporate banking, Islamic banking, investment "
-                    "banking, and wealth management services across the UAE and international markets."
-                ),
-                "countries_of_operation": ["UAE", "Saudi Arabia", "Egypt", "India", "Singapore", "United Kingdom"],
-                "management_team": [
-                    {"name": "Hesham Abdulla Al Qassim", "position": "Chairman"},
-                    {"name": "Shayne Nelson", "position": "Group CEO"},
-                    {"name": "Patrick Sullivan", "position": "Group CFO"},
-                    {"name": "Abdulla Qassem", "position": "Group COO"},
-                ],
-                "shareholder_structure": [
-                    {"name": "Investment Corporation of Dubai", "ownership_percentage": 55.8},
-                    {"name": "Public / Free Float", "ownership_percentage": 44.2},
-                ],
-                "strategic_partners": ["Visa", "Mastercard", "Oracle Financial Services", "Microsoft Azure"],
-                "revenue_by_subsidiaries_or_country": [
-                    {"subsidiary_or_country": "UAE", "total_operating_revenue": 18500000000},
-                    {"subsidiary_or_country": "Egypt (EBI)", "total_operating_revenue": 3200000000},
-                    {"subsidiary_or_country": "KSA", "total_operating_revenue": 1500000000},
-                    {"subsidiary_or_country": "International", "total_operating_revenue": 1490000000},
-                ],
-                "operational_scale": {
-                    "number_of_branches": 235,
-                    "number_of_employees": 24500,
-                    "number_of_customers": 14000000,
-                },
-            },
-            "financial_data": [
-                {
-                    "year": 2023,
-                    "financial_health": {
-                        "total_operating_revenue": 21500000000,
-                        "ebitda": 12800000000,
-                        "pat": 5310000000,
-                        "total_assets": 145000000000,
-                        "total_operating_expenses": 8700000000,
-                        "net_interests": 19200000000,
-                        "gross_loan_portfolio": 72000000000,
-                        "gross_non_performing_loans": 1290000000,
-                        "total_loan_loss_provisions": 1080000000,
-                        "total_equity": 15500000000,
-                        "debts_to_clients": 117000000000,
-                        "debts_to_financial_institutions": 12500000000,
-                        "credit_rating": "A+",
-                        "disbursals": 14000000000,
-                        "loans_with_arrears_over_30_days": 1800000000,
-                    },
-                },
-                {
-                    "year": 2024,
-                    "financial_health": {
-                        "total_operating_revenue": 24690000000,
-                        "ebitda": 15200000000,
-                        "pat": 6750000000,
-                        "total_assets": 158933083000,
-                        "total_operating_expenses": 9490000000,
-                        "net_interests": 22190000000,
-                        "gross_loan_portfolio": 78888408000,
-                        "gross_non_performing_loans": 1415000000,
-                        "total_loan_loss_provisions": 1250000000,
-                        "total_equity": 17377615000,
-                        "debts_to_clients": 128184124000,
-                        "debts_to_financial_institutions": 13360000000,
-                        "credit_rating": "A+",
-                        "disbursals": 16500000000,
-                        "loans_with_arrears_over_30_days": 2100000000,
-                    },
-                },
-            ],
-            "anomalies_and_risks": [
-                {
-                    "category": "Concentration Risk",
-                    "description": (
-                        "High geographic concentration in UAE market (75% of revenue). "
-                        "Egyptian subsidiary EBI faces currency devaluation risks."
-                    ),
-                    "severity_level": "Medium",
-                    "valuation_impact": "Could apply a 5-8% discount on multiples due to geographic concentration risk.",
-                    "negotiation_leverage": "Request detailed country-level P&L and stress test results for Egyptian operations.",
-                },
-                {
-                    "category": "Regulatory Compliance",
-                    "description": (
-                        "Increasing CBUAE capital requirements and Basel III implementation "
-                        "may require additional capital buffers."
-                    ),
-                    "severity_level": "Low",
-                    "valuation_impact": "Minimal direct impact but may constrain dividend distributions in the medium term.",
-                    "negotiation_leverage": "Review capital adequacy projections and dividend policy commitments.",
-                },
-            ],
-            "quality_of_it": {
-                "core_banking_systems": ["Oracle FLEXCUBE", "Temenos T24"],
-                "digital_channel_adoption": "High - Liv. digital bank platform with 500K+ users, mobile banking penetration at 85%",
-                "system_upgrades": ["Cloud migration to Azure (2023)", "AI-powered fraud detection (2024)"],
-                "vendor_partnerships": ["Microsoft", "Oracle", "Infosys"],
-                "cyber_incidents": [],
-            },
-            "macroeconomic_geo_view": [
-                {
-                    "country": "UAE",
-                    "population": "10.1M",
-                    "gdp_per_capita_ppp": "$78,255",
-                    "gdp_growth_forecast": "4.2%",
-                    "inflation": "2.3%",
-                    "central_bank_interest_rate": "5.40%",
-                    "unemployment_rate": "2.8%",
-                    "country_risk_rating": "AA",
-                    "corruption_perceptions_index_rank": "24",
-                },
-                {
-                    "country": "Egypt",
-                    "population": "109M",
-                    "gdp_per_capita_ppp": "$16,979",
-                    "gdp_growth_forecast": "4.1%",
-                    "inflation": "28.5%",
-                    "central_bank_interest_rate": "27.25%",
-                    "unemployment_rate": "7.1%",
-                    "country_risk_rating": "B-",
-                    "corruption_perceptions_index_rank": "108",
-                },
-            ],
-            "competitive_position": {
-                "key_competitors": ["First Abu Dhabi Bank", "Abu Dhabi Commercial Bank", "Dubai Islamic Bank", "Mashreq Bank"],
-                "market_share_data": "Second largest bank in UAE by assets with approximately 18% market share in retail banking.",
-                "central_bank_sector_reports_summary": "UAE banking sector remains well-capitalized with average CAR above 17%. Credit growth expected at 8-10% in 2025.",
-                "industry_studies_summary": "GCC banking sector benefits from strong oil revenues and economic diversification. Digital banking adoption accelerating.",
-                "customer_growth_or_attrition_news": "Added 1.2M new customers in 2024, primarily through Liv. digital platform.",
-            },
-            "management_quality": [
-                {
-                    "name": "Shayne Nelson",
-                    "position": "Group CEO",
-                    "previous_experience": "30+ years in banking, former CEO of Standard Chartered Middle East",
-                    "tenure_history": "CEO since 2013",
-                },
-                {
-                    "name": "Patrick Sullivan",
-                    "position": "Group CFO",
-                    "previous_experience": "25+ years in financial services, former CFO at ANZ Banking Group",
-                    "tenure_history": "CFO since 2018",
-                },
-            ],
-            "data_sources": {
-                "company_overview": {
-                    "description_of_products_and_services": "Files Upload",
-                    "countries_of_operation": "Web Search",
-                    "management_team": "Files Upload",
-                    "shareholder_structure": "Files Upload",
-                    "strategic_partners": "Web Search",
-                    "revenue_by_subsidiaries_or_country": "Files Upload",
-                    "operational_scale": "Files Upload",
-                },
-                "financial_data": {},
-            },
-        })
-
-        conn.execute(
-            "INSERT INTO analysis_runs (id, company_id, status, currency, result_json) "
-            "VALUES (1, 1, 'completed', 'AED', ?)",
-            (result_json,),
-        )
-
-        # Financial statements 2024
-        conn.execute(
-            "INSERT INTO financial_statements (id, analysis_run_id, year, currency) "
-            "VALUES (1, 1, 2024, 'AED')"
-        )
-
-        _seed_line_items(conn, stmt_id=1, year=2024)
-
-        # Financial statements 2023
-        conn.execute(
-            "INSERT INTO financial_statements (id, analysis_run_id, year, currency) "
-            "VALUES (2, 1, 2023, 'AED')"
-        )
-
-        _seed_line_items_2023(conn, stmt_id=2)
-
-        # Metrics 2024
-        for name, val in {
-            "total_assets": 158933083000, "total_liabilities": 140003323000,
-            "total_equity": 17377615000, "total_operating_revenue": 24690000000,
-            "total_operating_expenses": 9490000000, "pat": 6750000000,
-            "net_interests": 22190000000, "ebitda": 15200000000,
-            "gross_loan_portfolio": 78888408000, "gross_non_performing_loans": 1415000000,
-            "total_loan_loss_provisions": 1250000000, "debts_to_clients": 128184124000,
-            "debts_to_financial_institutions": 13360000000,
-        }.items():
-            conn.execute(
-                "INSERT INTO financial_metrics "
-                "(statement_id, metric_name, metric_value, is_calculated, data_source) "
-                "VALUES (1, ?, ?, 0, 'Files Upload')",
-                (name, val),
-            )
-
-        # Metrics 2023
-        for name, val in {
-            "total_assets": 145000000000, "total_liabilities": 129396099000,
-            "total_equity": 15500000000, "total_operating_revenue": 21500000000,
-            "total_operating_expenses": 8700000000, "pat": 5310000000,
-            "net_interests": 19200000000, "ebitda": 12800000000,
-            "gross_loan_portfolio": 72000000000, "gross_non_performing_loans": 1290000000,
-            "total_loan_loss_provisions": 1080000000, "debts_to_clients": 117000000000,
-            "debts_to_financial_institutions": 12500000000,
-        }.items():
-            conn.execute(
-                "INSERT INTO financial_metrics "
-                "(statement_id, metric_name, metric_value, is_calculated, data_source) "
-                "VALUES (2, ?, ?, 0, 'Files Upload')",
-                (name, val),
-            )
-
-        # Currency rates
-        for cur, yr, rate in [
-            ("AED", 2024, 0.2723), ("AED", 2023, 0.2723),
-            ("EGP", 2024, 0.0204), ("EGP", 2023, 0.0324),
-        ]:
-            conn.execute(
-                "INSERT INTO currency_rates (currency, year, rate_to_usd) VALUES (?, ?, ?)",
-                (cur, yr, rate),
-            )
-
-        # ── Company 2: Abu Dhabi Islamic Bank ──────────────────────────────
-        conn.execute(
-            "INSERT INTO companies (id, name, industry) "
-            "VALUES (2, 'Abu Dhabi Islamic Bank PJSC', 'Banking')"
-        )
-
-        result_json_2 = json.dumps({
-            "company_name": "Abu Dhabi Islamic Bank PJSC",
-            "currency": "AED",
-            "company_overview": {
-                "description_of_products_and_services": (
-                    "Abu Dhabi Islamic Bank (ADIB) is one of the leading Islamic financial "
-                    "institutions globally, offering Sharia-compliant retail, corporate, and "
-                    "investment banking services."
-                ),
-                "countries_of_operation": ["UAE", "Egypt", "United Kingdom"],
-                "management_team": [
-                    {"name": "Jawaan Awaidha Suhail Al Khaili", "position": "Chairman"},
-                    {"name": "Nasser Al Awadhi", "position": "Group CEO"},
-                ],
-                "shareholder_structure": [
-                    {"name": "Abu Dhabi Investment Council", "ownership_percentage": 61.6},
-                    {"name": "Public / Free Float", "ownership_percentage": 38.4},
-                ],
-                "strategic_partners": ["Mastercard", "Visa"],
-                "revenue_by_subsidiaries_or_country": [
-                    {"subsidiary_or_country": "UAE", "total_operating_revenue": 9200000000},
-                    {"subsidiary_or_country": "Egypt", "total_operating_revenue": 1431921000},
-                ],
-                "operational_scale": {
-                    "number_of_branches": 68,
-                    "number_of_employees": 5200,
-                    "number_of_customers": 1100000,
-                },
-            },
-            "financial_data": [
-                {
-                    "year": 2024,
-                    "financial_health": {
-                        "total_operating_revenue": 10631921000,
-                        "pat": 6101417000,
-                        "total_assets": 225909795000,
-                        "total_equity": 28317238000,
-                        "net_interests": 7784861000,
-                        "total_operating_expenses": 3700000000,
-                        "gross_loan_portfolio": 160000000000,
-                        "gross_non_performing_loans": 3520000000,
-                        "total_loan_loss_provisions": 2800000000,
-                        "debts_to_clients": 182000000000,
-                        "debts_to_financial_institutions": 15592557000,
-                        "total_liabilities": 197592557000,
-                    },
-                },
-            ],
-            "anomalies_and_risks": [],
-            "competitive_position": {
-                "key_competitors": ["Emirates NBD", "Dubai Islamic Bank", "Mashreq Bank"],
-                "market_share_data": "Third largest Islamic bank globally by assets.",
-                "central_bank_sector_reports_summary": "Islamic banking growing at 12% CAGR in UAE.",
-                "industry_studies_summary": "Sharia-compliant assets expected to reach $4T globally by 2026.",
-                "customer_growth_or_attrition_news": "Added 150K new customers in 2024.",
-            },
-            "management_quality": [],
-            "data_sources": {"company_overview": {}, "financial_data": {}},
-        })
-
-        conn.execute(
-            "INSERT INTO analysis_runs (id, company_id, status, currency, result_json) "
-            "VALUES (2, 2, 'completed', 'AED', ?)",
-            (result_json_2,),
-        )
-
-        conn.execute(
-            "INSERT INTO financial_statements (id, analysis_run_id, year, currency) "
-            "VALUES (3, 2, 2024, 'AED')"
-        )
-
-        for name, val in {
-            "total_assets": 225909795000, "total_liabilities": 197592557000,
-            "total_equity": 28317238000, "total_operating_revenue": 10631921000,
-            "total_operating_expenses": 3700000000, "pat": 6101417000,
-            "net_interests": 7784861000, "gross_loan_portfolio": 160000000000,
-            "gross_non_performing_loans": 3520000000, "total_loan_loss_provisions": 2800000000,
-            "debts_to_clients": 182000000000, "debts_to_financial_institutions": 15592557000,
-        }.items():
-            conn.execute(
-                "INSERT INTO financial_metrics "
-                "(statement_id, metric_name, metric_value, is_calculated, data_source) "
-                "VALUES (3, ?, ?, 0, 'Files Upload')",
-                (name, val),
-            )
-
-        # ── Company 3: Wio Bank ────────────────────────────────────────────
-        conn.execute(
-            "INSERT INTO companies (id, name, industry) "
-            "VALUES (3, 'Wio Bank PJSC', 'Banking')"
-        )
-
-        result_json_3 = json.dumps({
-            "company_name": "Wio Bank PJSC",
-            "currency": "AED",
-            "company_overview": {
-                "description_of_products_and_services": (
-                    "Wio Bank is a digital-first bank in the UAE, offering innovative banking "
-                    "solutions for individuals and SMEs through a fully digital platform."
-                ),
-                "countries_of_operation": ["UAE"],
-                "management_team": [
-                    {"name": "Salem Al Noaimi", "position": "Chairman"},
-                    {"name": "Jayesh Patel", "position": "CEO"},
-                ],
-                "shareholder_structure": [
-                    {"name": "ADQ", "ownership_percentage": 25.0},
-                    {"name": "Alpha Dhabi", "ownership_percentage": 25.0},
-                    {"name": "Etisalat", "ownership_percentage": 25.0},
-                    {"name": "First Abu Dhabi Bank", "ownership_percentage": 25.0},
-                ],
-                "strategic_partners": ["Etisalat", "First Abu Dhabi Bank"],
-                "revenue_by_subsidiaries_or_country": [
-                    {"subsidiary_or_country": "UAE", "total_operating_revenue": 1253619000},
-                ],
-                "operational_scale": {
-                    "number_of_branches": 0,
-                    "number_of_employees": 450,
-                    "number_of_customers": 500000,
-                },
-            },
-            "financial_data": [
-                {
-                    "year": 2024,
-                    "financial_health": {
-                        "total_operating_revenue": 1253619000,
-                        "pat": 394983000,
-                        "total_assets": 37354676000,
-                        "total_equity": 2206217000,
-                        "net_interests": 900304000,
-                        "total_operating_expenses": 858636000,
-                        "gross_loan_portfolio": 830000000,
-                        "gross_non_performing_loans": 0,
-                        "total_loan_loss_provisions": 0,
-                        "debts_to_clients": 34800000000,
-                        "debts_to_financial_institutions": 348459000,
-                        "total_liabilities": 35148459000,
-                    },
-                },
-            ],
-            "anomalies_and_risks": [],
-            "competitive_position": {
-                "key_competitors": ["Zand Bank", "YAP", "Mashreq Neo"],
-                "market_share_data": "Fastest growing digital bank in UAE with 500K customers.",
-                "central_bank_sector_reports_summary": "Digital banking licenses expanding in UAE.",
-                "industry_studies_summary": "Digital banking penetration in GCC expected to reach 40% by 2027.",
-                "customer_growth_or_attrition_news": "Tripled customer base in 2024.",
-            },
-            "management_quality": [],
-            "data_sources": {"company_overview": {}, "financial_data": {}},
-        })
-
-        conn.execute(
-            "INSERT INTO analysis_runs (id, company_id, status, currency, result_json) "
-            "VALUES (3, 3, 'completed', 'AED', ?)",
-            (result_json_3,),
-        )
-
-        conn.execute(
-            "INSERT INTO financial_statements (id, analysis_run_id, year, currency) "
-            "VALUES (4, 3, 2024, 'AED')"
-        )
-
-        for name, val in {
-            "total_assets": 37354676000, "total_liabilities": 35148459000,
-            "total_equity": 2206217000, "total_operating_revenue": 1253619000,
-            "total_operating_expenses": 858636000, "pat": 394983000,
-            "net_interests": 900304000, "gross_loan_portfolio": 830000000,
-            "gross_non_performing_loans": 0, "total_loan_loss_provisions": 0,
-            "debts_to_clients": 34800000000, "debts_to_financial_institutions": 348459000,
-        }.items():
-            conn.execute(
-                "INSERT INTO financial_metrics "
-                "(statement_id, metric_name, metric_value, is_calculated, data_source) "
-                "VALUES (4, ?, ?, 0, 'Files Upload')",
-                (name, val),
-            )
-
-        # Peer ratings for Emirates NBD
-        peer_rating_data = json.dumps({
-            "target_company": "Emirates NBD",
-            "companies": [
-                {"company_name": "Emirates NBD", "pat": 1837.575, "total_equity": 4731.1, "roe": 38.8, "gross_loan_portfolio": 21479.2, "currency": "USDm"},
-                {"company_name": "Abu Dhabi Islamic Bank PJSC", "pat": 1661.2, "total_equity": 7708.8, "roe": 21.5, "gross_loan_portfolio": 43552.0, "currency": "USDm"},
-                {"company_name": "Wio Bank PJSC", "pat": 107.6, "total_equity": 600.5, "roe": 17.9, "gross_loan_portfolio": 226.1, "currency": "USDm"},
-            ],
-            "scores": {
-                "Emirates NBD": [
-                    {"criterion": "Contribution to Profitability", "score": 4.5, "justification": "Strong ROE and consistent profit growth"},
-                    {"criterion": "Size of Transaction", "score": 4.0, "justification": "Large-scale bank with significant asset base"},
-                    {"criterion": "Geographic / Strategic Fit", "score": 3.5, "justification": "Strong UAE presence with growing international footprint"},
-                    {"criterion": "Product / Market Strategy Fit", "score": 4.0, "justification": "Comprehensive product suite across retail and corporate"},
-                    {"criterion": "Ease of Execution", "score": 3.0, "justification": "Complex regulatory environment and large workforce"},
-                    {"criterion": "Quality & Depth of Management", "score": 4.5, "justification": "Experienced leadership team with strong track record"},
-                    {"criterion": "Strategic Partners", "score": 3.5, "justification": "Good technology partnerships"},
-                    {"criterion": "Quality of IT & Data", "score": 4.0, "justification": "Strong digital platform with Liv."},
-                    {"criterion": "Competitor Positioning", "score": 4.0, "justification": "Second largest bank in UAE"},
-                ],
-            },
-            "overall_scores": {"Emirates NBD": 3.9},
-            "summaries": {
-                "Emirates NBD": (
-                    "Emirates NBD is a strong acquisition target with robust profitability, "
-                    "experienced management, and a leading market position in the UAE."
-                ),
-            },
-        })
-
-        conn.execute(
-            "INSERT INTO peer_ratings (company_id, result_json) VALUES (1, ?)",
-            (peer_rating_data,),
-        )
-
         conn.commit()
-        logger.info("[DB] Sample data seeded successfully")
 
-
-# ---------------------------------------------------------------------------
-# Seed helper: line items (extracted to reduce _seed_sample_data length)
-# ---------------------------------------------------------------------------
-
-def _seed_line_items(conn: sqlite3.Connection, stmt_id: int, year: int) -> None:
-    """Insert line items for the 2024 Emirates NBD statement."""
-    _insert_items = lambda items: [
-        conn.execute(
-            """INSERT INTO financial_line_items
-               (id, statement_id, category, item_name, value_reported,
-                size_percent, change_percent, absolute_change, sort_order, is_total, data_source)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            item,
-        )
-        for item in items
-    ]
-
-    _insert_items([
-        (1, stmt_id, "Asset", "Loans and advances to customers (net)", 78888408000, 49.64, 42.0, 23171645000, 1, 0, "Files Upload"),
-        (2, stmt_id, "Asset", "Due from banks", 49997020000, 31.46, 239.0, 35264273000, 2, 0, "Files Upload"),
-        (3, stmt_id, "Asset", "Treasury bills", 12908423000, 8.12, -61.0, -20371244000, 3, 0, "Files Upload"),
-        (4, stmt_id, "Asset", "Financial investments at amortized cost", 7057117000, 4.44, 97.0, 3483620000, 4, 0, "Files Upload"),
-        (5, stmt_id, "Asset", "Other assets", 10082115000, 6.34, 15.0, 1318128000, 5, 0, "Files Upload"),
-        (6, stmt_id, "Asset", "Total", 158933083000, 100.0, 24.0, 30814422000, 99, 1, "Files Upload"),
-    ])
-
-    _insert_items([
-        (7, stmt_id, "Liability", "Customers' deposits", 128184124000, 91.56, 25.0, 25528295000, 1, 0, "Files Upload"),
-        (8, stmt_id, "Liability", "Due to banks", 4992284000, 3.56, -35.0, -2682067000, 2, 0, "Files Upload"),
-        (9, stmt_id, "Liability", "Other liabilities", 3600771000, 2.57, 45.0, 1115478000, 3, 0, "Files Upload"),
-        (10, stmt_id, "Liability", "Other loans", 2622211000, 1.87, 18.0, 394656000, 4, 0, "Files Upload"),
-        (11, stmt_id, "Liability", "Other provisions", 587287000, 0.42, 55.0, 209314000, 5, 0, "Files Upload"),
-        (12, stmt_id, "Liability", "Total", 140003323000, 100.0, 20.0, 23488563000, 99, 1, "Files Upload"),
-    ])
-
-    _insert_items([
-        (13, stmt_id, "Equity", "Retained earnings", 11399250000, 65.60, 73.0, 4828955000, 1, 0, "Files Upload"),
-        (14, stmt_id, "Equity", "Issued and paid up capital", 5000000000, 28.77, 0.0, 0, 2, 0, "Files Upload"),
-        (15, stmt_id, "Equity", "Reserves", 978365000, 5.63, 2811.0, 944759000, 3, 0, "Files Upload"),
-        (16, stmt_id, "Equity", "Total", 17377615000, 100.0, 50.0, 5773714000, 99, 1, "Files Upload"),
-    ])
-
-    _insert_items([
-        (17, stmt_id, "Income", "Interest from loans and similar income", 23630524000, 213.0, 50.0, 7927720000, 1, 0, "Files Upload"),
-        (18, stmt_id, "Income", "Cost of deposits and similar expenses", -12533845000, -113.0, -49.0, -4094806000, 2, 0, "Files Upload"),
-        (19, stmt_id, "Income", "Net interest income", 11096679000, 100.0, 53.0, 3832914000, 3, 0, "Files Upload"),
-        (20, stmt_id, "Income", "Fees and commissions income", 2279052000, 21.0, 50.0, 755435000, 4, 0, "Files Upload"),
-        (21, stmt_id, "Income", "Fees and commissions expenses", -583950000, -5.0, -44.0, -179366000, 5, 0, "Files Upload"),
-        (22, stmt_id, "Income", "Net fees and commissions income", 1695102000, 15.0, 51.0, 576069000, 6, 0, "Files Upload"),
-        (23, stmt_id, "Income", "Dividends income", 2382000, 0.0, 3.0, 78000, 7, 0, "Files Upload"),
-        (24, stmt_id, "Income", "Net trading income", 766289000, 7.0, 191.0, 503391000, 8, 0, "Files Upload"),
-        (25, stmt_id, "Income", "Gain on financial investment", 32929000, 0.0, 1.0, 384000, 9, 0, "Files Upload"),
-        (26, stmt_id, "Income", "Impairment charges of credit losses", -1669249000, -15.0, -8.0, -127532000, 10, 0, "Files Upload"),
-        (27, stmt_id, "Income", "Administrative expenses", -2707618000, -24.0, -39.0, -755975000, 11, 0, "Files Upload"),
-        (28, stmt_id, "Income", "Other operating expenses", -1678898000, -15.0, -458.0, -1377946000, 12, 0, "Files Upload"),
-        (29, stmt_id, "Income", "Profit for the year before income tax", 7537616000, 68.0, 54.0, 2651382000, 13, 0, "Files Upload"),
-        (30, stmt_id, "Income", "Income tax expense", -787616000, -7.0, -120.0, -430000000, 14, 0, "Files Upload"),
-        (31, stmt_id, "Income", "Net income (PAT)", 6750000000, 61.0, 27.0, 1440000000, 99, 1, "Files Upload"),
-    ])
-
-
-def _seed_line_items_2023(conn: sqlite3.Connection, stmt_id: int) -> None:
-    """Insert simplified 2023 line items for Emirates NBD."""
-    _insert = lambda items: [
-        conn.execute(
-            """INSERT INTO financial_line_items
-               (id, statement_id, category, item_name, value_reported,
-                size_percent, change_percent, absolute_change, sort_order, is_total, data_source)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            item,
-        )
-        for item in items
-    ]
-
-    _insert([
-        (32, stmt_id, "Asset", "Loans and advances to customers (net)", 55716763000, 43.14, 0, 0, 1, 0, "Files Upload"),
-        (33, stmt_id, "Asset", "Due from banks", 14732747000, 11.41, 0, 0, 2, 0, "Files Upload"),
-        (34, stmt_id, "Asset", "Treasury bills", 33279667000, 25.77, 0, 0, 3, 0, "Files Upload"),
-        (35, stmt_id, "Asset", "Financial investments at amortized cost", 3573497000, 2.77, 0, 0, 4, 0, "Files Upload"),
-        (36, stmt_id, "Asset", "Other assets", 21815987000, 16.89, 0, 0, 5, 0, "Files Upload"),
-        (37, stmt_id, "Asset", "Total", 129118661000, 100.0, 0, 0, 99, 1, "Files Upload"),
-    ])
-
-    _insert([
-        (38, stmt_id, "Liability", "Customers' deposits", 102655829000, 88.12, 0, 0, 1, 0, "Files Upload"),
-        (39, stmt_id, "Liability", "Due to banks", 7674351000, 6.59, 0, 0, 2, 0, "Files Upload"),
-        (40, stmt_id, "Liability", "Other liabilities", 2485293000, 2.13, 0, 0, 3, 0, "Files Upload"),
-        (41, stmt_id, "Liability", "Other loans", 2227555000, 1.91, 0, 0, 4, 0, "Files Upload"),
-        (42, stmt_id, "Liability", "Other provisions", 377973000, 0.32, 0, 0, 5, 0, "Files Upload"),
-        (43, stmt_id, "Liability", "Total", 116514760000, 100.0, 0, 0, 99, 1, "Files Upload"),
-    ])
-
-    _insert([
-        (44, stmt_id, "Equity", "Retained earnings", 6570295000, 52.0, 0, 0, 1, 0, "Files Upload"),
-        (45, stmt_id, "Equity", "Issued and paid up capital", 5000000000, 39.6, 0, 0, 2, 0, "Files Upload"),
-        (46, stmt_id, "Equity", "Reserves", 33606000, 0.27, 0, 0, 3, 0, "Files Upload"),
-        (47, stmt_id, "Equity", "Total", 11603901000, 100.0, 0, 0, 99, 1, "Files Upload"),
-    ])
+    logger.info("[DB] _seed_currency_rates: {} rate entries ensured", len(RATES))
