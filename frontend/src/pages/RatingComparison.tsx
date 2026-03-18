@@ -4,7 +4,7 @@ import {
     ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid,
     Line, ComposedChart, Legend, Cell, Bar,
 } from 'recharts';
-import { ShieldAlert, Play, Loader2, Trophy, Target, BarChart3, Settings2, UserPlus, X, DollarSign } from 'lucide-react';
+import { ShieldAlert, Play, Loader2, Trophy, Target, BarChart3, Settings2, UserPlus, X, DollarSign, RefreshCw } from 'lucide-react';
 import { runPeerRating, fetchPeerRating, fetchAnalyses, fetchComparison } from '../api';
 import { computeRatios } from '../utils/computeRatios';
 import type { AnalysisData, PeerRatingResult, CriterionScore, AnalysisListItem, ComparisonData } from '../types';
@@ -306,7 +306,18 @@ function RatingTab({ data, compData, loadingComp }: { data: AnalysisData, compDa
         <div className={`space-y-8 transition-opacity duration-500 ${visible ? 'opacity-100' : 'opacity-0'}`}>
             {/* Action bar */}
             <div className="flex flex-wrap items-center justify-between gap-3">
-                <PeerSelector availableCompanies={availableCompanies} selectedPeers={selectedPeers} peerDropdownOpen={peerDropdownOpen} setPeerDropdownOpen={setPeerDropdownOpen} addPeer={addPeer} removePeer={removePeer} />
+                <div className="flex items-center gap-3">
+                    <PeerSelector availableCompanies={availableCompanies} selectedPeers={selectedPeers} peerDropdownOpen={peerDropdownOpen} setPeerDropdownOpen={setPeerDropdownOpen} addPeer={addPeer} removePeer={removePeer} />
+                    <button 
+                        onClick={() => handleRun()} 
+                        disabled={loading}
+                        title="Recompute M&A scores using the latest metrics (useful if you have manually edited financial data)"
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-xs font-semibold transition-colors shadow-sm disabled:opacity-50 group relative"
+                    >
+                        {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                        Recompute Ratings
+                    </button>
+                </div>
                 <button onClick={() => { setDraftWeights({ ...weights }); setEditingWeights(!editingWeights); }} className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-semibold text-gray-600 transition-colors">
                     <Settings2 className="w-3 h-3" />
                     {editingWeights ? 'Cancel Weights' : 'Edit Weights'}

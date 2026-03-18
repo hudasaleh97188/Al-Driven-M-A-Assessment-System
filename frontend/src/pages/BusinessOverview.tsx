@@ -24,7 +24,7 @@ export default function BusinessOverview({ data, onEditClick }: { data: Analysis
     const ov = data.company_overview;
     const mgmt = data.management_quality ?? [];
     const partners = ov?.strategic_partners ?? [];
-    const subsidiaries = ov?.revenue_by_subsidiaries_or_country ?? [];
+    const revenueByCountry = ov?.revenue_by_country ?? [];
     const scale = ov?.operational_scale;
     const it = data.quality_of_it;
     const competitive = data.competitive_position;
@@ -94,15 +94,15 @@ export default function BusinessOverview({ data, onEditClick }: { data: Analysis
                         </div>
                     )}
 
-                    {/* Revenue by Subsidiaries or Country */}
-                    {subsidiaries.length > 0 && (
+                    {/* Revenue by Country */}
+                    {revenueByCountry.length > 0 && (
                         <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm relative">
-                            <div className="absolute top-4 right-4">{getSourceBadge("revenue_by_subsidiaries_or_country")}</div>
-                            <h4 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Total Operating Revenue by Subsidiaries / Country ({data.currency})</h4>
+                            <div className="absolute top-4 right-4">{getSourceBadge("revenue_by_country")}</div>
+                            <h4 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Operating Revenue by Country ({data.currency})</h4>
                             <div className="h-64 mt-4">
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={subsidiaries} margin={{ top: 10, right: 20, bottom: 30, left: 10 }}>
-                                        <XAxis dataKey="subsidiary_or_country" tick={<CustomXAxisTick />} interval={0} axisLine={false} tickLine={false} height={40} />
+                                    <BarChart data={revenueByCountry} margin={{ top: 10, right: 20, bottom: 30, left: 10 }}>
+                                        <XAxis dataKey="country" tick={<CustomXAxisTick />} interval={0} axisLine={false} tickLine={false} height={40} />
                                         <YAxis type="number" tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} width={70} />
                                         <Tooltip
                                             contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#0f172a', fontSize: '12px', padding: '8px 12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)' }}
@@ -110,7 +110,7 @@ export default function BusinessOverview({ data, onEditClick }: { data: Analysis
                                             formatter={(v: any) => [`${v} ${data.currency}`, 'Total Operating Revenue']}
                                         />
                                         <Bar dataKey="total_operating_revenue" radius={[6, 6, 0, 0]}>
-                                            {subsidiaries.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                                            {revenueByCountry.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                                         </Bar>
                                     </BarChart>
                                 </ResponsiveContainer>
@@ -120,40 +120,37 @@ export default function BusinessOverview({ data, onEditClick }: { data: Analysis
                 </div>
             </section>
 
-            {/* ──── Leadership & Ownership ──── */}
+            {/* ──── Management Quality ──── */}
             <section>
-                <SectionHeader icon={<Briefcase className="w-4 h-4" />} title="Leadership & Ownership" color="violet" />
+                <SectionHeader icon={<Briefcase className="w-4 h-4" />} title="Management Quality" color="violet" />
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                    {/* Management Team */}
+                    {/* Management Quality */}
                     <div className="lg:col-span-2">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {(ov?.management_team ?? []).map(member => {
-                                const detail = getManagementDetail(member.name);
-                                return (
-                                    <div key={member.name} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow relative">
-                                        <div className="flex items-center gap-3 mb-3">
-                                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-violet-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">
-                                                {member.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                                            </div>
-                                            <div>
-                                                <div className="font-semibold text-gray-900 text-sm">{member.name}</div>
-                                                <div className="text-[11px] text-blue-600 font-medium uppercase tracking-wider">{member.position}</div>
-                                            </div>
+                            {mgmt.map((member, idx) => (
+                                <div key={idx} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow relative">
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-violet-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">
+                                            {member.name ? member.name.split(' ').map(n => n.charAt(0)).join('').slice(0, 2) : '??'}
                                         </div>
-                                        {detail?.previous_experience && (
-                                            <p className="text-xs text-gray-500 leading-relaxed mb-1.5">
-                                                <span className="font-semibold text-gray-600">Experience: </span>{detail.previous_experience}
-                                            </p>
-                                        )}
-                                        {detail?.tenure_history && (
-                                            <p className="text-xs text-gray-500 leading-relaxed">
-                                                <span className="font-semibold text-gray-600">Tenure: </span>{detail.tenure_history}
-                                            </p>
-                                        )}
+                                        <div>
+                                            <div className="font-semibold text-gray-900 text-sm">{member.name || 'Unknown Name'}</div>
+                                            <div className="text-[11px] text-blue-600 font-medium uppercase tracking-wider">{member.position || ''}</div>
+                                        </div>
                                     </div>
-                                );
-                            })}
+                                    {member.previous_experience && (
+                                        <p className="text-xs text-gray-500 leading-relaxed mb-1.5">
+                                            <span className="font-semibold text-gray-600">Experience: </span>{member.previous_experience}
+                                        </p>
+                                    )}
+                                    {member.tenure_history && (
+                                        <p className="text-xs text-gray-500 leading-relaxed">
+                                            <span className="font-semibold text-gray-600">Tenure: </span>{member.tenure_history}
+                                        </p>
+                                    )}
+                                </div>
+                            ))}
                         </div>
                         <div className="mt-4 flex gap-2 items-center flex-wrap">
                             <span className="text-xs text-slate-500 font-medium whitespace-nowrap">Sources:</span>

@@ -54,6 +54,11 @@ COMPANY_OVERVIEW_SCHEMA = {
         "description_of_products_and_services": {"type": "STRING"},
         "countries_of_operation": {
             "type": "ARRAY",
+            "description": (
+                "Countries where the company has active, revenue-generating entities, "
+                "branches, or licensed operations. Exclude pure representative offices, "
+                "outsourced IT hubs, or countries where they only have customers but no legal presence."
+            ),
             "items": {"type": "STRING"},
         },
         "management_team": {
@@ -71,20 +76,22 @@ COMPANY_OVERVIEW_SCHEMA = {
             "description": "e.g., World Bank, IFC, EBRD, major tech or financial partners.",
             "items": {"type": "STRING"},
         },
-        "revenue_by_subsidiaries_or_country": {
+        "revenue_by_country": {
             "type": "ARRAY",
             "description": (
-                "Revenue breakdown by subsidiaries or country if subsidiaries "
-                "are not available (latest available year). Values must be in "
-                "TRUE BASE CURRENCY UNITS after scale conversion."
+                "Revenue breakdown for latest available year. "
+                "CRITICAL: You MUST include an entry here for EVERY country listed in "
+                "'countries_of_operation'. If the specific revenue number for a country "
+                "is missing or unknown, omit 'total_operating_revenue' or set it to null, "
+                "but ALWAYS include the country name."
             ),
             "items": {
                 "type": "OBJECT",
                 "properties": {
-                    "subsidiary_or_country":  {"type": "STRING"},
+                    "country": {"type": "STRING"},
                     "total_operating_revenue": {"type": "NUMBER"},
                 },
-                "required": ["subsidiary_or_country", "total_operating_revenue"],
+                "required": ["country"],
             },
         },
         "operational_scale": {
@@ -112,7 +119,7 @@ COMPANY_OVERVIEW_SCHEMA = {
         "management_team",
         "shareholder_structure",
         "strategic_partners",
-        "revenue_by_subsidiaries_or_country",
+        "revenue_by_country",
         "operational_scale",
     ],
 }

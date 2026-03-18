@@ -36,11 +36,11 @@ Extract values for ALL years present in the reports.
 
 1. Build company_overview (extract once based on the highest year available):
    - Description of products and services
-   - Countries of operation
+   - Countries of operation (CRITICAL: Only include countries with active, revenue-generating entities, branches, or licensed operations. Exclude rep offices or non-physical presence.)
    - Management team (CEO, CFO, CTO, CRO/Head of Risk only)
    - Shareholder structure (major shareholders + ownership %)
    - Strategic Partners (IFIs: World Bank, IFC, EBRD; major tech/funding partners)
-   - Revenue by subsidiaries or country if subsidiaries are not available (Must output the numerical value using the exact key "total_operating_revenue")
+   - Revenue by Country (Must output the numerical value using the key "total_operating_revenue". You MUST include an entry for EVERY country listed in "Countries of operation", setting revenue to null or omitting it if the data is missing).
    - Operational Scale for the LATEST year only:
      * Number of branches (physical only, exclude POS or agents)
      * Number of employees / FTEs

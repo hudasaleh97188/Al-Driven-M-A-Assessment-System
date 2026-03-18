@@ -1,8 +1,8 @@
 // TypeScript interfaces matching the backend data shapes
 
-export interface SubsidiaryRevenue {
-    subsidiary_or_country: string;
-    total_operating_revenue: number;
+export interface CountryRevenue {
+    country: string;
+    total_operating_revenue?: number;
 }
 
 export interface ManagementMember {
@@ -27,7 +27,7 @@ export interface CompanyOverview {
     management_team?: ManagementMember[];
     shareholder_structure?: Shareholder[];
     strategic_partners?: string[];
-    revenue_by_subsidiaries_or_country?: SubsidiaryRevenue[];
+    revenue_by_country?: CountryRevenue[];
     operational_scale?: OperationalScale;
 }
 
@@ -239,6 +239,7 @@ export interface PeerRatingWeights {
 export interface ComparisonCompany {
     company_name: string;
     currency: string;
+    original_currency?: string;
     year: number;
     usd_rate: number | null;
     metrics: Record<string, number>;

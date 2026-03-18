@@ -36,17 +36,34 @@ def _extract_company_data(analysis: dict) -> dict:
     ``_convert_to_usd()`` is applied later.
     """
     overview = analysis.get("company_overview", {})
-    fin_data = analysis.get("financial_data", [])
     quality_of_it = analysis.get("quality_of_it", {})
     competitive_pos = analysis.get("competitive_position", {})
 
     # Latest year's financial health
     latest: dict = {}
     latest_year: int = 0
-    if fin_data:
-        sorted_data = sorted(fin_data, key=lambda x: x.get("year", 0), reverse=True)
-        latest = sorted_data[0].get("financial_health", {})
-        latest_year = sorted_data[0].get("year", 0)
+
+    # 1. Prioritise database statements (which have overlaid manual edits)
+    fin_stmts = analysis.get("financial_statements", [])
+    if fin_stmts:
+        # Use the latest statement by year
+        sorted_stmts = sorted(fin_stmts, key=lambda x: x.get("year", 0), reverse=True)
+        stmt = sorted_stmts[0]
+        latest_year = stmt.get("year", 0)
+        # Pull metrics from stmt["metrics"]
+        m = stmt.get("metrics", {})
+        latest = {
+            "pat": m.get("pat") or m.get("profit_after_tax"),
+            "total_equity": m.get("total_equity") or m.get("equity"),
+            "gross_loan_portfolio": m.get("gross_loan_portfolio") or m.get("glp")
+        }
+    # 2. Fallback to raw extracted financial_data if stmts are missing
+    else:
+        fin_data = analysis.get("financial_data", [])
+        if fin_data:
+            sorted_data = sorted(fin_data, key=lambda x: x.get("year", 0), reverse=True)
+            latest = sorted_data[0].get("financial_health", {})
+            latest_year = sorted_data[0].get("year", 0)
 
     scale = overview.get("operational_scale", {})
     shareholders = overview.get("shareholder_structure", [])
@@ -60,7 +77,7 @@ def _extract_company_data(analysis: dict) -> dict:
         "total_equity": latest.get("total_equity"),
         "gross_loan_portfolio": latest.get("gross_loan_portfolio"),
         # Metadata for currency conversion
-        "currency": analysis.get("currency", "USD"),
+        "currency": analysis.get("currency") or analysis.get("original_currency") or "USD",
         "latest_year": latest_year,
         # Qualitative fields
         "countries_of_operation": overview.get("countries_of_operation", []),

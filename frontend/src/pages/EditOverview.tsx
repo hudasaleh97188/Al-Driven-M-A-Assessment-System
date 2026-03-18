@@ -95,78 +95,56 @@ function extractFields(data: AnalysisData): FieldDef[] {
         }
     }
 
-    // ── Revenue by Subsidiaries / Country ────────────────────────────────
-    (ov?.revenue_by_subsidiaries_or_country ?? []).forEach((s, i) => {
+    // ── Revenue by Country ────────────────────────────────
+    (ov?.revenue_by_country ?? []).forEach((s, i) => {
         fields.push({
-            path: `company_overview.revenue_by_subsidiaries_or_country[${i}].subsidiary_or_country`,
-            label: `Subsidiary #${i + 1} — Name`,
-            section: 'Revenue by Subsidiary / Country',
+            path: `company_overview.revenue_by_country[${i}].country`,
+            label: `Country #${i + 1} — Name`,
+            section: 'Revenue by Country',
             type: 'text',
-            currentValue: s.subsidiary_or_country || '',
+            currentValue: s.country || '',
         });
         fields.push({
-            path: `company_overview.revenue_by_subsidiaries_or_country[${i}].total_operating_revenue`,
-            label: `Subsidiary #${i + 1} — Revenue`,
-            section: 'Revenue by Subsidiary / Country',
+            path: `company_overview.revenue_by_country[${i}].total_operating_revenue`,
+            label: `Country #${i + 1} — Revenue`,
+            section: 'Revenue by Country',
             type: 'number',
             currentValue: String(s.total_operating_revenue ?? ''),
         });
     });
 
-    // ── Management Team ──────────────────────────────────────────────────
-    (ov?.management_team ?? []).forEach((m, i) => {
-        fields.push({
-            path: `company_overview.management_team[${i}].name`,
-            label: `Manager #${i + 1} — Name`,
-            section: 'Management Team',
-            type: 'text',
-            currentValue: m.name,
-        });
-        fields.push({
-            path: `company_overview.management_team[${i}].position`,
-            label: `Manager #${i + 1} — Position`,
-            section: 'Management Team',
-            type: 'text',
-            currentValue: m.position,
-        });
-    });
+    // ── Management Quality ──────────────────────────────────────────────
+    const mgmtQuality = data.management_quality ?? [];
 
-    // ── Management Quality (deep-dive from LLM Stage 2) ─────────────────
-    (data.management_quality ?? []).forEach((m, i) => {
+    mgmtQuality.forEach((mq, i) => {
         fields.push({
             path: `management_quality[${i}].name`,
             label: `Leader #${i + 1} — Name`,
             section: 'Management Quality',
             type: 'text',
-            currentValue: m.name || '',
+            currentValue: mq.name || '',
         });
-        if (m.position !== undefined) {
-            fields.push({
-                path: `management_quality[${i}].position`,
-                label: `Leader #${i + 1} — Position`,
-                section: 'Management Quality',
-                type: 'text',
-                currentValue: m.position || '',
-            });
-        }
-        if (m.previous_experience !== undefined) {
-            fields.push({
-                path: `management_quality[${i}].previous_experience`,
-                label: `Leader #${i + 1} — Previous Experience`,
-                section: 'Management Quality',
-                type: 'textarea',
-                currentValue: m.previous_experience || '',
-            });
-        }
-        if (m.tenure_history !== undefined) {
-            fields.push({
-                path: `management_quality[${i}].tenure_history`,
-                label: `Leader #${i + 1} — Tenure History`,
-                section: 'Management Quality',
-                type: 'textarea',
-                currentValue: m.tenure_history || '',
-            });
-        }
+        fields.push({
+            path: `management_quality[${i}].position`,
+            label: `Leader #${i + 1} — Position`,
+            section: 'Management Quality',
+            type: 'text',
+            currentValue: mq.position || '',
+        });
+        fields.push({
+            path: `management_quality[${i}].previous_experience`,
+            label: `Leader #${i + 1} — Experience`,
+            section: 'Management Quality',
+            type: 'textarea',
+            currentValue: mq.previous_experience || '',
+        });
+        fields.push({
+            path: `management_quality[${i}].tenure_history`,
+            label: `Leader #${i + 1} — Tenure`,
+            section: 'Management Quality',
+            type: 'textarea',
+            currentValue: mq.tenure_history || '',
+        });
     });
 
     // ── Shareholders ─────────────────────────────────────────────────────
@@ -430,9 +408,8 @@ function extractFields(data: AnalysisData): FieldDef[] {
 const SECTION_COLORS: Record<string, { bar: string; bg: string; text: string; count: string }> = {
     'Company Overview':                 { bar: 'bg-blue-500',    bg: 'bg-blue-50',    text: 'text-blue-800',    count: 'bg-blue-100 text-blue-700' },
     'Operational Scale':                { bar: 'bg-indigo-500',  bg: 'bg-indigo-50',  text: 'text-indigo-800',  count: 'bg-indigo-100 text-indigo-700' },
-    'Revenue by Subsidiary / Country':  { bar: 'bg-violet-500',  bg: 'bg-violet-50',  text: 'text-violet-800',  count: 'bg-violet-100 text-violet-700' },
-    'Management Team':                  { bar: 'bg-purple-500', bg: 'bg-purple-50',  text: 'text-purple-800',  count: 'bg-purple-100 text-purple-700' },
-    'Management Quality':               { bar: 'bg-fuchsia-500',bg: 'bg-fuchsia-50', text: 'text-fuchsia-800', count: 'bg-fuchsia-100 text-fuchsia-700' },
+    'Revenue by Country':               { bar: 'bg-violet-500',  bg: 'bg-violet-50',  text: 'text-violet-800',  count: 'bg-violet-100 text-violet-700' },
+    'Management Quality':               { bar: 'bg-purple-500', bg: 'bg-purple-50',  text: 'text-purple-800',  count: 'bg-purple-100 text-purple-700' },
     'Shareholders':                     { bar: 'bg-pink-500',   bg: 'bg-pink-50',    text: 'text-pink-800',    count: 'bg-pink-100 text-pink-700' },
     'Quality of IT & Data Usage':       { bar: 'bg-cyan-500',   bg: 'bg-cyan-50',    text: 'text-cyan-800',    count: 'bg-cyan-100 text-cyan-700' },
     'Competitive Position':             { bar: 'bg-orange-500', bg: 'bg-orange-50',  text: 'text-orange-800',  count: 'bg-orange-100 text-orange-700' },

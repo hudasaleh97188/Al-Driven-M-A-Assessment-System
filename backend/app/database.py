@@ -435,7 +435,6 @@ def apply_financial_edits(stmt_dict: dict) -> dict:
         if op == "UPDATE":
             if li_id and li_id in line_items:
                 line_items[li_id]["value_reported"] = val
-                line_items[li_id]["data_source"] = "Manually Edited"
             elif m_name:
                 metrics[m_name] = val
         
@@ -459,7 +458,7 @@ def apply_financial_edits(stmt_dict: dict) -> dict:
                     "value_reported": val,
                     "sort_order": 999, # Put at bottom
                     "is_total": False,
-                    "data_source": "Manually Added"
+                    "data_source": "Files Upload"
                 })
 
     # Filter out deleted items and combine with added items
@@ -568,7 +567,7 @@ def update_line_item(line_item_id: int, new_value: float) -> bool:
     """Update a single line item value."""
     with _get_conn() as conn:
         conn.execute(
-            "UPDATE financial_line_items SET value_reported = ?, data_source = 'Manually Edited' "
+            "UPDATE financial_line_items SET value_reported = ? "
             "WHERE id = ?",
             (new_value, line_item_id),
         )
@@ -583,7 +582,7 @@ def update_metric(statement_id: int, metric_name: str, new_value: float) -> bool
         conn.execute(
             """INSERT OR REPLACE INTO financial_metrics
                (statement_id, metric_name, metric_value, is_calculated, data_source)
-               VALUES (?, ?, ?, 0, 'Manually Edited')""",
+               VALUES (?, ?, ?, 0, 'Files Upload')""",
             (statement_id, metric_name, new_value),
         )
         conn.commit()
