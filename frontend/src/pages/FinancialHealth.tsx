@@ -255,10 +255,12 @@ export default function FinancialHealth({ data, onEditClick }: Props) {
                         <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-2">Key Ratios</h3>
                         <div className="grid grid-cols-2 gap-3">
                             <MetricCard title="Loan-to-Deposit" value={r.loan_to_deposit_percent} delta={yoyChange('loan_to_deposit_percent', true)} isRatio badge={ratioBadge('gross_loan_portfolio', 'debts_to_clients')} />
+                            <MetricCard title="Loan-to-Asset" value={r.loans_to_assets_percent} delta={yoyChange('loans_to_assets_percent', true)} isRatio badge={ratioBadge('gross_loan_portfolio', 'total_assets')} />
                             <MetricCard title="Capital Adequacy" value={r.capital_adequacy_percent} delta={yoyChange('capital_adequacy_percent', true)} isRatio badge={ratioBadge('total_equity', 'total_assets')} />
                             <MetricCard title="Non-Performing Loan" value={r.npl_percent} delta={yoyChange('npl_percent', true)} isRatio isNegativeGood badge={ratioBadge('gross_non_performing_loans', 'gross_loan_portfolio')} />
+                            <MetricCard title="Provision Coverage" value={r.provision_coverage_percent} delta={yoyChange('provision_coverage_percent', true)} isRatio badge={ratioBadge('total_loan_loss_provisions', 'gross_non_performing_loans')} />
+                            <MetricCard title="PAR >30 %" value={r.par_30_percent} delta={yoyChange('par_30_percent', true)} isRatio isNegativeGood badge={ratioBadge('loans_with_arrears_over_30_days', 'gross_loan_portfolio')} />
                             <MetricCard title="Liquidity Coverage" value={r.equity_to_glp_percent} delta={yoyChange('equity_to_glp_percent', true)} isRatio badge={ratioBadge('total_equity', 'gross_loan_portfolio')} />
-                            <MetricCard title="Provision Coverage" value={r.provision_coverage_percent} delta={yoyChange('provision_coverage_percent', true)} isRatio badge={ratioBadge('loan_loss_provisions', 'gross_non_performing_loans')} />
                         </div>
                     </div>
                 </div>
